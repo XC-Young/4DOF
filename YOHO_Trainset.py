@@ -1,9 +1,11 @@
 """
 Generate Trainset using 3dmatch_train for PartI and PartII.
-PC*60 rotations->FCGF backbone-> FCGF Group feature for PC keypoints;
-PC + PCA filter -->new keys for less training noise;
-PC pair + gt --> gt pps;
-pps + FCGF Group feature --> batch.
+for pair in pairs:
+    random rotation --> pc0 pc1
+    random z rotation --> pc1
+    feature extraction --> feats0 feats1
+    point pairs selection (already generated)
+    save -- batch
 """
 
 import os
@@ -20,14 +22,48 @@ from utils.misc import extract_features
 from fcgf_model import load_model
 
 
+def Random_z_rotation():
+    rng = np.random.RandomState()
+    theta = np.pi * rng.uniform(-1.0, 1.0)
+    theta1 = np.pi * rng.uniform(-0.083, 0.083)
+    alpha=theta
+    beta=theta1
+    gama=theta1
+    Rzalpha=np.array([[np.cos(alpha),np.sin(alpha),0],
+                      [-np.sin(alpha),np.cos(alpha),0],
+                      [0,0,1]])
+
+    Rybeta=np.array([[np.cos(beta),0,-np.sin(beta)],
+                     [0,1,0],
+                     [np.sin(beta),0,np.cos(beta)]])
+
+    Rxgama=np.array([[1,0,0],
+                     [0,np.cos(gama),-np.sin(gama)],
+                     [0,np.sin(gama),np.cos(gama)]])
+    R=np.matmul(Rxgama,np.matmul(Rybeta,Rzalpha))
+    return R
+
+def sample_random_trans_zgroup():
+  R = np.eye(3)
+  theta = np.pi / 4.0 * random.randint(1,8)
+  alpha = theta
+  Rzalpha=np.array([[np.cos(alpha),np.sin(alpha),0],
+                    [-np.sin(alpha),np.cos(alpha),0],
+                    [0,0,1]])
+  R = Rzalpha
+  return R
+
+
 class trainset_create():
     def __init__(self,setname='3dmatch_train'):
         self.dataset_name=setname
         self.origin_data_dir='./data/origin_data'
         self.datasets=get_dataset_name(self.dataset_name,self.origin_data_dir)
         self.output_dir='./data/YOHO_FCGF'
-        self.Rgroup=np.load('./group_related/Rotation.npy')
+        self.Rgroup=np.load('./group_related/Rotation_8.npy')
         self.valscenes=self.datasets['valscenes']
+        self.batchsize=32
+        self.val_num=5000
 
     def PCA_keys_sample(self):
         for name,dataset in tqdm(self.datasets.items()):
@@ -42,7 +78,8 @@ class trainset_create():
                 if os.path.exists(f'{Save_keys_dir}/{pc_id}_index.npy'):continue
                 Keys_index=np.loadtxt(dataset.get_key_dir(pc_id)).astype(np.int)
                 Keys=dataset.get_kps(pc_id)
-                Pcas=np.load(f'{dataset.root}/pca_0.3/{pc_id}.npy')
+                # Pcas=np.load(f'{dataset.root}/pca_0.3/{pc_id}.npy')
+                Pcas=np.ones_like(Keys)
                 Ok_index=np.arange(Pcas.shape[0])[Pcas[:,0]>0.03].astype(np.int)
                 Keys=Keys[Ok_index]
                 Keys_index=Keys_index[Ok_index]
@@ -63,7 +100,7 @@ class trainset_create():
 
     
     def FCGF_Group_Feature_Extractor(self,args,Point,Keys_index): #index in pc
-        #output:kn*32*60
+        #output:kn*32*8
         output=[]
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -106,36 +143,8 @@ class trainset_create():
                 one_R_output.append(feature[idx[0]][None,:])
             one_R_output=np.concatenate(one_R_output,axis=0)#kn*32
             output.append(one_R_output[:,:,None])
-        return np.concatenate(output,axis=-1) #kn*32*60
+        return np.concatenate(output,axis=-1) #kn*32*8
 
-
-    def PC_random_rot_feat(self,args):
-        for key,dataset in tqdm(self.datasets.items()):
-            if key in ['wholesetname','valscenes']:continue
-            for pc_id in tqdm(dataset.pc_ids):
-                Feats_save_dir=f'{self.output_dir}/Rotated_Features/{dataset.name}'
-                make_non_exists_dir(Feats_save_dir)
-                if os.path.exists(f'{Feats_save_dir}/{pc_id}_feats.npz'):continue
-                Random_Rs=[]
-                Feats=[]
-
-                PC=dataset.get_pc(pc_id)
-                Key_idx=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{pc_id}_index.npy')
-                
-                for R_i in range(5):
-                    R_one=random_rotation_matrix()
-                    Random_Rs.append(R_one[None,:,:])
-                Random_Rs=np.concatenate(Random_Rs,axis=0)# 5*3*3
-
-                for R_i in range(5):
-                    PC_one=PC@Random_Rs[R_i].T
-                    feat_one=self.FCGF_Group_Feature_Extractor(args,PC_one,Key_idx) #kn*32*60
-                    Feats.append(feat_one[None,:,:,:])
-                Feats=np.concatenate(Feats,axis=0)#5*kn*32*60
-
-                np.save(f'{Feats_save_dir}/{pc_id}_Rs.npy',Random_Rs)
-                np.savez(f'{Feats_save_dir}/{pc_id}_feats.npz',Rs=Random_Rs,feats=Feats)
-    
 
     def R2DR_id(self,R):
         min_diff=180
@@ -155,152 +164,148 @@ class trainset_create():
         return quaternion_from_matrix(deltaR)
 
 
-    def trainset(self):
+    # Trainset generating
+    def trainset(self,args,repeat_dataset=3):
+        batch_id=0
         Save_list_dir=f'{self.output_dir}/Train_val_list/trainset'
         make_non_exists_dir(Save_list_dir)
-        batch_i=-1
-        trainlist_pair=[]
-        for name,dataset in tqdm(self.datasets.items()):
-            if name in ['wholesetname','valscenes']:continue
-            if name in self.valscenes:
-                print(f'val scene: {name}')
-                continue
-            for pair in tqdm(dataset.pair_ids):
-                pc0,pc1=pair
-                #if os.path.exists(f'{Save_list_dir}/{i*16)}.pth'):continue
-                #feature readin
-                Feats0=np.load(f'{self.output_dir}/Rotated_Features/{dataset.name}/{pc0}_feats.npz')
-                Feats1=np.load(f'{self.output_dir}/Rotated_Features/{dataset.name}/{pc1}_feats.npz')
-                Feats0_f=Feats0['feats']
-                Feats1_f=Feats1['feats']
-                Feats0_R=Feats0['Rs']
-                Feats1_R=Feats1['Rs']
-                AllRs=[]
-                AllR_indexs=[]
-                AlldeltaRs=[]
-                for Ri_id in range(Feats0_R.shape[0]):
-                    for Rj_id in range(Feats1_R.shape[0]):
-                        R_i=Feats0_R[Ri_id]
-                        R_j=Feats1_R[Rj_id]
-                        R=R_j@R_i.T
-                        true_idx=self.R2DR_id(R)
-                        delR=self.DeltaR(R,true_idx)
-                        AllRs.append(R[None,:,:])
-                        AllR_indexs.append(true_idx)
-                        AlldeltaRs.append(delR[None,:])
-                AllRs=np.concatenate(AllRs,axis=0).reshape([5,5,3,3])
-                AllR_indexs=np.array(AllR_indexs).reshape([5,5])
-                AlldeltaRs=np.concatenate(AlldeltaRs,axis=0).reshape([5,5,4])
-
-                #pps
-                Key_pps=np.load(f'{self.output_dir}/Pairs_0.03/{dataset.name}/{pc0}-{pc1}.npy') #index in keys
-                keys0=dataset.get_kps(pc0)
-                keys1=dataset.get_kps(pc1)
-                pps_all=np.arange(Key_pps.shape[0]) #index
-                
-                if pps_all.shape[0]<10:continue
-                if pps_all.shape[0]<32:
-                    pps_all=np.repeat(pps_all,int(32/pps_all.shape[0])+1)
-                    np.random.shuffle(pps_all)
-                
-                for i in range(10):
-                    #pair pps (choose 32):
-                    np.random.shuffle(pps_all)
-                    pps=Key_pps[pps_all[0:32]]# bn*2
-                    keys_sample0=keys0[pps[:,0]]
-                    keys_sample1=keys1[pps[:,1]]
-                    BaseIndex=np.arange(5).astype(np.int)
-                    Index_i=np.random.choice(BaseIndex, size=32, replace=True)
-                    Index_j=np.random.choice(BaseIndex, size=32, replace=True)
-                    
-                    Rs=[]
-                    R_indexs=[]
-                    deltaR=[]
-                    feats_one_batch_i=[]
-                    feats_one_batch_j=[]
-                    for b in range(32):
-                        Rs.append(AllRs[Index_i[b],Index_j[b]][None,:,:])
-                        R_indexs.append(AllR_indexs[Index_i[b],Index_j[b]])
-                        deltaR.append(AlldeltaRs[Index_i[b],Index_j[b]][None,:])
-                        #feat
-                        feats_one_batch_i.append(Feats0_f[Index_i[b],pps[b,0]][None,:,:])
-                        feats_one_batch_j.append(Feats1_f[Index_j[b],pps[b,1]][None,:,:])
-                    Rs=np.concatenate(Rs,axis=0)
+        for Repeat in range(repeat_dataset):
+            for key,dataset in tqdm(self.datasets.items()):
+                if key in ['wholesetname','valscenes']:continue
+                for pair in tqdm(dataset.pair_ids):
+                    id0,id1=pair
+                    #random rotation, R_id, R_residule
+                    pc0=dataset.get_pc(id0)                    
+                    pc1=dataset.get_pc(id1)         
+                    R_base=random_rotation_matrix()
+                    pc0=pc0@R_base.T
+                    pc1=pc1@R_base.T
+                    R_z=Random_z_rotation()
+                    pc1=pc1@R_z.T   
+                    R_index=self.R2DR_id(R_z)
+                    R_residule=self.DeltaR(R_z,R_index)
+                    R_zs,R_indexs,R_residules=[],[],[]
+                    for b in range(self.batchsize):
+                        R_zs.append(R_z[None,:,:])
+                        R_indexs.append(R_index)
+                        R_residules.append(R_residule[None,:])
+                    R_zs=np.concatenate(R_zs,axis=0)
                     R_indexs=np.array(R_indexs)
-                    deltaR=np.concatenate(deltaR,axis=0)
-                    feats_one_batch_i=np.concatenate(feats_one_batch_i,axis=0)
-                    feats_one_batch_j=np.concatenate(feats_one_batch_j,axis=0)
-
+                    R_residules=np.concatenate(R_residules,axis=0)                      
+                    #pc0_feat
+                    Key_idx0=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{id0}_index.npy')
+                    feats0=self.FCGF_Group_Feature_Extractor(args,pc0,Key_idx0)
+                    #pc1_feat
+                    Key_idx1=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{id1}_index.npy')
+                    feats1=self.FCGF_Group_Feature_Extractor(args,pc1,Key_idx1)                   
+                    #sample pps
+                    Key_pps=np.load(f'{self.output_dir}/Pairs_0.03/{dataset.name}/{id0}-{id1}.npy') #index in keys
+                    pps_all=np.arange(Key_pps.shape[0]) #index
+                    if pps_all.shape[0]<10:continue
+                    if pps_all.shape[0]<self.batchsize:
+                        pps_all=np.repeat(pps_all,int(self.batchsize/pps_all.shape[0])+1)
+                        np.random.shuffle(pps_all)
+                    np.random.shuffle(pps_all)
+                    pps=Key_pps[pps_all[0:self.batchsize]]# bn*2
+                    #sample keys
+                    keys0=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{id0}_coor.npy')  
+                    keys_sample0=keys0[pps[:,0]]
+                    keys1=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{id1}_coor.npy')  
+                    keys1=dataset.get_kps(id1)  
+                    keys_sample1=keys1[pps[:,1]] 
+                    #sample feats
+                    feats0=feats0[pps[:,0]]
+                    feats1=feats1[pps[:,1]]
+                    #save                   
                     item={
-                        'feats0':torch.from_numpy(feats_one_batch_i.astype(np.float32)), #before enhanced rot
-                        'feats1':torch.from_numpy(feats_one_batch_j.astype(np.float32)), #after enhanced rot
+                        'feats0':torch.from_numpy(feats0.astype(np.float32)), #before enhanced rot
+                        'feats1':torch.from_numpy(feats1.astype(np.float32)), #after enhanced rot
                         'keys0':torch.from_numpy(keys_sample0.astype(np.float32)),
                         'keys1':torch.from_numpy(keys_sample1.astype(np.float32)),
-                        'R':torch.from_numpy(Rs.astype(np.float32)),
+                        'R':torch.from_numpy(R_zs.astype(np.float32)),
                         'true_idx':torch.from_numpy(R_indexs.astype(np.int)),
-                        'deltaR':torch.from_numpy(deltaR.astype(np.float32))
-                    }
-                    batch_i+=1
-                    torch.save(item,f'{Save_list_dir}/{batch_i}.pth',_use_new_zipfile_serialization=False)
-                    trainlist_pair.append((dataset.name,pc0,pc1,i))
-            save_pickle([i for i in range(batch_i+1)],f'{self.output_dir}/Train_val_list/train.pkl')
-            save_pickle(trainlist_pair,f'{self.output_dir}/Train_val_list/train_pcp.pkl')
-        
-
+                        'deltaR':torch.from_numpy(R_residules.astype(np.float32))
+                    }                  
+                    torch.save(item,f'{Save_list_dir}/{batch_id}.pth',_use_new_zipfile_serialization=False)
+                    batch_id+=1
+        save_pickle(range(batch_id),f'{self.output_dir}/Train_val_list/train.pkl')
+                
 
     def valset(self):
         Save_list_dir=f'{self.output_dir}/Train_val_list/valset'
         make_non_exists_dir(Save_list_dir)
-        val_pc_pts=[]
-        if not os.path.exists(f'{self.output_dir}/Train_val_list/val_pcp.pkl'):
-            for scene in tqdm(self.valscenes):
-                dataset=self.datasets[scene]
-                for pair in tqdm(dataset.pair_ids):
-                    pc0,pc1=pair
-                    Key_pps=np.load(f'{self.output_dir}/Pairs_0.03/{dataset.name}/{pc0}-{pc1}.npy') #index in keys
-                    for k in range(Key_pps.shape[0]):
-                        BaseIndex=np.arange(5).astype(np.int)
-                        Ri=np.random.choice(BaseIndex, size=1, replace=True)[0]
-                        Rj=np.random.choice(BaseIndex, size=1, replace=True)[0]
-                        val_pc_pts.append((dataset.name,pc0,pc1,Ri,Rj,Key_pps[k,0],Key_pps[k,1]))
-            random.shuffle(val_pc_pts)
-            val_pc_pts=val_pc_pts[0:5000]
-            save_pickle([i for i in range(len(val_pc_pts))],f'{self.output_dir}/Train_val_list/val.pkl')
-            save_pickle(val_pc_pts,f'{self.output_dir}/Train_val_list/val_pcp.pkl')
-        else:
-            val_pc_pts=read_pickle(f'{self.output_dir}/Train_val_list/val_pcp.pkl')
-
-        for i in tqdm(range(len(val_pc_pts))):
-            datasetname,pc0,pc1,Ri_id,Rj_id,pt0,pt1=val_pc_pts[i]
-            Feats0=np.load(f'{self.output_dir}/Rotated_Features/{datasetname}/{pc0}_feats.npz')
-            Feats1=np.load(f'{self.output_dir}/Rotated_Features/{datasetname}/{pc1}_feats.npz')
-            datasetname=datasetname[(str.rfind(datasetname,'/')+1):]
-            keys0=self.datasets[datasetname].get_kps(pc0)
-            keys1=self.datasets[datasetname].get_kps(pc1)
-            key0=keys0[pt0]
-            key1=keys1[pt1]
-            R_i=Feats0['Rs'][Ri_id]
-            R_j=Feats1['Rs'][Rj_id]
-            R=R_j@R_i.T
-            true_idx=self.R2DR_id(R)
-            feat0=Feats0['feats'][Ri_id,pt0]
-            feat1=Feats1['feats'][Rj_id,pt1]
+        batch_id=0
+        val_list=[]
+        for scene in tqdm(self.valscenes):
+            dataset=self.datasets[scene]
+            for pair in tqdm(dataset.pair_ids):
+                id0,id1=pair
+                val_list.append((scene,id0,id1))
+        random.shuffle(val_list)
+        for pair in val_list[0:self.val_num]:
+            scene,id0,id1=pair
+            dataset=self.datasets[scene]
+            #random rotation, R_id, R_residule
+            pc0=dataset.get_pc(id0)                    
+            pc1=dataset.get_pc(id1)         
+            R_base=random_rotation_matrix()
+            pc0=pc0@R_base.T
+            pc1=pc1@R_base.T
+            R_z=Random_z_rotation()
+            pc1=pc1@R_z.T   
+            R_index=self.R2DR_id(R_z)
+            R_residule=self.DeltaR(R_z,R_index)
+            R_zs,R_indexs,R_residules=[],[],[]
+            for b in range(self.batchsize):
+                R_zs.append(R_z[None,:,:])
+                R_indexs.append(R_index)
+                R_residules.append(R_residule[None,:])
+            R_zs=np.concatenate(R_zs,axis=0)
+            R_indexs=np.array(R_indexs)
+            R_residules=np.concatenate(R_residules,axis=0)                      
+            #pc0_feat
+            Key_idx0=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{id0}_index.npy')
+            feats0=self.FCGF_Group_Feature_Extractor(args,pc0,Key_idx0)
+            #pc1_feat
+            Key_idx1=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{id1}_index.npy')
+            feats1=self.FCGF_Group_Feature_Extractor(args,pc1,Key_idx1)                   
+            #sample pps
+            Key_pps=np.load(f'{self.output_dir}/Pairs_0.03/{dataset.name}/{id0}-{id1}.npy') #index in keys
+            pps_all=np.arange(Key_pps.shape[0]) #index
+            if pps_all.shape[0]<10:continue
+            if pps_all.shape[0]<self.batchsize:
+                pps_all=np.repeat(pps_all,int(self.batchsize/pps_all.shape[0])+1)
+                np.random.shuffle(pps_all)
+            np.random.shuffle(pps_all)
+            pps=Key_pps[pps_all[0:self.batchsize]]# bn*2
+            #sample keys
+            keys0=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{id0}_coor.npy')  
+            keys_sample0=keys0[pps[:,0]]
+            keys1=np.load(f'{self.output_dir}/Filtered_Keys/{dataset.name}/{id1}_coor.npy')  
+            keys_sample1=keys1[pps[:,1]] 
+            #sample feats
+            feats0=feats0[pps[:,0]]
+            feats1=feats1[pps[:,1]]
+            #save                   
             item={
-                'feats0':torch.from_numpy(feat0.astype(np.float32)), #before enhanced rot 32*60
-                'feats1':torch.from_numpy(feat1.astype(np.float32)), #after enhanced rot 32*60
-                'keys0':key0,
-                'keys1':key1,
-                'R':torch.from_numpy(R.astype(np.float32)),
-                'true_idx':torch.from_numpy(np.array([true_idx]))
-            }
-            torch.save(item,f'{Save_list_dir}/{i}.pth',_use_new_zipfile_serialization=False)
+                'feats0':torch.from_numpy(feats0.astype(np.float32)), #before enhanced rot
+                'feats1':torch.from_numpy(feats1.astype(np.float32)), #after enhanced rot
+                'keys0':torch.from_numpy(keys_sample0.astype(np.float32)),
+                'keys1':torch.from_numpy(keys_sample1.astype(np.float32)),
+                'R':torch.from_numpy(R_zs.astype(np.float32)),
+                'true_idx':torch.from_numpy(R_indexs.astype(np.int)),
+                'deltaR':torch.from_numpy(R_residules.astype(np.float32))
+            }                  
+            torch.save(item,f'{Save_list_dir}/{batch_id}.pth',_use_new_zipfile_serialization=False)
+            batch_id+=1
+        save_pickle(range(batch_id),f'{self.output_dir}/Train_val_list/val.pkl')
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-m',
         '--model',
-        default='./model/Backbone/best_val_checkpoint.pth',
+        default='./model/Backbone_large/best_val_checkpoint.pth',
         type=str,
         help='path to latest checkpoint (default: None)')
     parser.add_argument(
@@ -317,7 +322,6 @@ if __name__=="__main__":
 
     trainset_creater=trainset_create(setname=args.datasetname)
     trainset_creater.PCA_keys_sample()
-    trainset_creater.PC_random_rot_feat(args)
-    trainset_creater.trainset()
+    trainset_creater.trainset(args)
     trainset_creater.valset()
     
