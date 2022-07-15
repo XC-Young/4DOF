@@ -232,7 +232,7 @@ class Enhanced_train_dataset_PartI(Dataset):
         self.cfg=cfg
         self.output_dir=self.cfg.output_cache_fn
         self.is_training=is_training
-        self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation.npy').astype(np.float32)
+        self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy').astype(np.float32)
         if self.is_training:
             self.name_pair_ids=read_pickle(cfg.train_pcpair_list_fn) #list: name id0 id1 pt1 pt2
         else:
@@ -267,7 +267,7 @@ class Enhanced_train_dataset_PartII(Dataset):
         self.cfg=cfg
         self.output_dir=self.cfg.output_cache_fn
         self.is_training=is_training
-        self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation.npy').astype(np.float32)
+        self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy').astype(np.float32)
         if self.is_training:
             self.name_pair_ids=read_pickle(cfg.train_pcpair_list_fn) #list: name id0 id1 pt1 pt2
         else:

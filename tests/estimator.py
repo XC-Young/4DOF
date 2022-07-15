@@ -280,8 +280,8 @@ class yohoo:
     def __init__(self,cfg):
         self.cfg=cfg
         self.inliner_dist=cfg.ransac_o_inlinerdist
-        self.Nei_in_SO3=np.load(f'{self.cfg.SO3_related_files}/60_60.npy')
-        self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation.npy')
+        self.Nei_in_SO3=np.load(f'{self.cfg.SO3_related_files}/8_8.npy')
+        self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy')
 
     def overlap_cal(self,key_m0,key_m1,T):
         key_m1=transform_points(key_m1,T)

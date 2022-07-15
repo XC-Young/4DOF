@@ -21,7 +21,7 @@ class Loss(abc.ABC):
 class Batch_hard_Rindex_loss(Loss):
     def __init__(self,cfg):
         super().__init__(['triplet_ranking_Rindex_loss'])
-        self.R_perm=torch.from_numpy(np.load(f'{cfg.SO3_related_files}/60_60.npy').astype(np.int).reshape([-1])).cuda()
+        self.R_perm=torch.from_numpy(np.load(f'{cfg.SO3_related_files}/8_8.npy').astype(np.int).reshape([-1])).cuda()
         self.class_loss=torch.nn.CrossEntropyLoss()
 
     def eqvloss(self,eqvfeat0,eqvfeat1):
@@ -48,7 +48,7 @@ class Batch_hard_Rindex_loss(Loss):
         loss=torch.mean(torch.clamp_min(loss_true-loss_false+0.3,0))
 
         score=self.eqvloss(data_pr['feats0_eqv_af_conv'],data_pr['feats1_eqv_af_conv'])
-        sign=torch.nn.functional.one_hot(Index,60)
+        sign=torch.nn.functional.one_hot(Index,8)
         eqv_loss=self.class_loss(score,Index)
         return 5*loss+eqv_loss
 

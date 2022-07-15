@@ -81,6 +81,51 @@ def random_rotation_matrix():
     R=np.matmul(Rzgama,np.matmul(Rybeta,Rzalpha))
     return R
 
+def random_rotation_matrix_z():
+    """
+    Generates a z only random 3D rotation matrix from axis and angle.
+
+    Args:
+        numpy_random_state: numpy random state object
+
+    Returns:
+        Random rotation matrix.
+    """
+    rng = np.random.RandomState()
+    # axis = rng.rand(3) - 0.5
+    # axis /= np.linalg.norm(axis) + 1E-8
+    theta = np.pi * rng.uniform(-1.0, 1.0)
+    theta1 = np.pi * rng.uniform(-0.083, 0.083)
+    #thetas=axis*theta
+    alpha=theta
+    beta=theta1
+    gama=theta1
+    Rzalpha=np.array([[np.cos(alpha),np.sin(alpha),0],
+                      [-np.sin(alpha),np.cos(alpha),0],
+                      [0,0,1]])
+
+    Rybeta=np.array([[np.cos(beta),0,-np.sin(beta)],
+                     [0,1,0],
+                     [np.sin(beta),0,np.cos(beta)]])
+
+    Rxgama=np.array([[1,0,0],
+                     [0,np.cos(gama),-np.sin(gama)],
+                     [0,np.sin(gama),np.cos(gama)]])
+    R=np.matmul(Rxgama,np.matmul(Rybeta,Rzalpha))
+    return R
+
+def sample_random_trans_zgroup(pcd):
+  T = np.eye(4)
+  theta = np.pi / 4.0 * np.random.randint(1,8)
+  alpha = theta
+  Rzalpha=np.array([[np.cos(alpha),np.sin(alpha),0],
+                    [-np.sin(alpha),np.cos(alpha),0],
+                    [0,0,1]])
+  R = Rzalpha
+  T[:3, :3] = R
+  T[:3, 3] = R.dot(-np.mean(pcd, axis=0))
+  return T
+
 #train
 class MultiGPUWrapper(nn.Module):
     def __init__(self,network,losses):

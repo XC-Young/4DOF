@@ -66,16 +66,16 @@ class extractor_PartI():
 class extractor_dr_index():
     def __init__(self,cfg):
         self.cfg=cfg
-        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/60_60.npy').reshape([-1]).astype(np.int)).cuda()
+        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/8_8.npy').reshape([-1]).astype(np.int)).cuda()
 
     def Des2R_torch(self,des1_eqv,des2_eqv):#beforerot afterrot
-        des1_eqv=des1_eqv[:,self.Nei_in_SO3].reshape([-1,60,60])
+        des1_eqv=des1_eqv[:,self.Nei_in_SO3].reshape([-1,8,8])
         cor=torch.einsum('fag,fg->a',des1_eqv,des2_eqv)
         return torch.argmax(cor)
 
     def Batch_Des2R_torch(self,des1_eqv,des2_eqv):#beforerot afterrot
         B,F,G=des1_eqv.shape
-        des1_eqv=des1_eqv[:,:,self.Nei_in_SO3].reshape([B,F,60,60])
+        des1_eqv=des1_eqv[:,:,self.Nei_in_SO3].reshape([B,F,8,8])
         cor=torch.einsum('bfag,bfg->ba',des1_eqv,des2_eqv)
         return torch.argmax(cor,dim=1)
   
@@ -109,7 +109,7 @@ class extractor_PartII():
         self.network=name2network[f'{self.cfg.test_network_type}'](self.cfg).cuda()
         self.model_fn=f'{self.cfg.model_fn}/{self.cfg.train_network_type}/model.pth'
         self.best_model_fn=f'{self.cfg.model_fn}/{self.cfg.train_network_type}/model_best.pth'
-        self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation.npy').astype(np.float32)
+        self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy').astype(np.float32)
 
     #Model_import
     def _load_model(self):

@@ -1,6 +1,6 @@
 """
 Generate YOHO input for Testset.
-PC*60 rotations->FCGF backbone-> FCGF Group feature for PC keypoints.
+PC*8 rotations->FCGF backbone-> FCGF Group feature for PC keypoints.
 """
 
 import time
@@ -23,11 +23,11 @@ class FCGFDataset():
         self.pointlist=[]
         self.voxel_size = config.voxel_size
         self.datasets=datasets
-        self.Rgroup=np.load('./group_related/Rotation.npy')
+        self.Rgroup=np.load('./group_related/Rotation_8.npy')
         for scene,dataset in self.datasets.items():
             if scene=='wholesetname':continue
             for pc_id in dataset.pc_ids:
-                for g_id in range(60):
+                for g_id in range(8):
                     self.pointlist.append((scene,pc_id,g_id))
                 self.points[f'{scene}_{pc_id}']=self.datasets[scene].get_pc(pc_id)
 
@@ -62,7 +62,7 @@ class testset_create():
         self.output_dir='./data/YOHO_FCGF'
         self.origin_dir='./data/origin_data'
         self.datasets=get_dataset_name(self.dataset_name,self.origin_dir)
-        self.Rgroup=np.load('./group_related/Rotation.npy')
+        self.Rgroup=np.load('./group_related/Rotation_8.npy')
         self.knn=knn_module.KNN(1)
 
 
@@ -159,7 +159,7 @@ class testset_create():
                     one_R_output=feature[nnindex,:]#5000*32
                     features[f'{scene}_{pc_id}'].append(one_R_output[:,:,None])
                     features_gid[f'{scene}_{pc_id}'].append(g_id)
-                    if len(features_gid[f'{scene}_{pc_id}'])==60:
+                    if len(features_gid[f'{scene}_{pc_id}'])==8:
                         sort_args=np.array(features_gid[f'{scene}_{pc_id}'])
                         sort_args=np.argsort(sort_args)
                         output=np.concatenate(features[f'{scene}_{pc_id}'],axis=-1)[:,:,sort_args]

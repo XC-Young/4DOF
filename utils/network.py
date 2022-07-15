@@ -15,7 +15,7 @@ class Comb_Conv(nn.Module):
         self.comb_layer=nn.Sequential(
             nn.BatchNorm2d(in_dim),
             nn.ReLU(),
-            nn.Conv2d(in_dim,out_dim,(1,13),1)
+            nn.Conv2d(in_dim,out_dim,(1,3),1)
         )
     def forward(self,input):
         return self.comb_layer(input)
@@ -27,12 +27,12 @@ class Residual_Comb_Conv(nn.Module):
         self.comb_layer_in=nn.Sequential(
             nn.BatchNorm2d(in_dim),
             nn.ReLU(),
-            nn.Conv2d(in_dim,middle_dim,(1,13),1)
+            nn.Conv2d(in_dim,middle_dim,(1,3),1)
         )
         self.comb_layer_out=nn.Sequential(
             nn.BatchNorm2d(middle_dim),
             nn.ReLU(),
-            nn.Conv2d(middle_dim,out_dim,(1,13),1)
+            nn.Conv2d(middle_dim,out_dim,(1,3),1)
         )
         self.short_cut=False
         if not in_dim==out_dim:
@@ -40,7 +40,7 @@ class Residual_Comb_Conv(nn.Module):
             self.short_cut_layer=nn.Sequential(
             nn.BatchNorm2d(in_dim),
             nn.ReLU(),
-            nn.Conv2d(in_dim,out_dim,(1,13),1)
+            nn.Conv2d(in_dim,out_dim,(1,3),1)
             )
     
     def data_process(self,data):
@@ -48,10 +48,10 @@ class Residual_Comb_Conv(nn.Module):
         if len(data.size())==2:
             data=data[None,:,:]
         data=data[:,:,self.Nei_in_SO3]
-        data=torch.reshape(data,[data.shape[0],data.shape[1],60,13])
+        data=torch.reshape(data,[data.shape[0],data.shape[1],8,3])
         return data
 
-    def forward(self,feat_input):#feat:bn*f*60
+    def forward(self,feat_input):#feat:bn*f*8
         feat=self.data_process(feat_input)
         feat=self.comb_layer_in(feat)
         feat=self.data_process(feat)
@@ -62,25 +62,25 @@ class Residual_Comb_Conv(nn.Module):
         else:
             feat_sc=feat_input
         
-        return feat+feat_sc #output:bn*f*60
+        return feat+feat_sc #output:bn*f*8
 
 class PartI_network(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg=cfg
 
-        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/Nei_Index_in_SO3_ordered_13.npy').astype(np.int).reshape([-1])).cuda()    #nei 60*12 readin
-        self.Rgroup_npy=np.load(f'{self.cfg.SO3_related_files}/Rotation.npy').astype(np.float32)
+        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/Nei_Index_in_SO3_ordered_3.npy').astype(np.int).reshape([-1])).cuda()    #nei 8*12 readin
+        self.Rgroup_npy=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy').astype(np.float32)
         self.Rgroup=torch.from_numpy(self.Rgroup_npy).cuda()
 
-        self.Conv_in=nn.Sequential(nn.Conv2d(32,256,(1,13),1))
+        self.Conv_in=nn.Sequential(nn.Conv2d(32,256,(1,3),1))
         self.SO3_Conv_layers=nn.ModuleList([Residual_Comb_Conv(256,512,256,self.Nei_in_SO3)])
         self.Conv_out=Comb_Conv(256,32)
 
     def data_process(self,data):
         data=torch.squeeze(data)
         data=data[:,:,self.Nei_in_SO3]
-        data=torch.reshape(data,[data.shape[0],data.shape[1],60,13])
+        data=torch.reshape(data,[data.shape[0],data.shape[1],8,3])
         return data
 
     def SO3_Conv(self,data):#data:bn,f,gn
@@ -109,17 +109,17 @@ class PartI_train(nn.Module):
         super().__init__()
         self.cfg=cfg
         self.PartI_net=PartI_network(self.cfg)
-        self.R_index_permu=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/60_60.npy').astype(np.int)).cuda() 
+        self.R_index_permu=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/8_8.npy').astype(np.int)).cuda() 
         
     
     def Des2DR(self,Des1,Des2):#before_rot after_rot
-        Des1=Des1[:,:,torch.reshape(self.R_index_permu,[-1])].reshape([Des1.shape[0],Des1.shape[1],60,60])
+        Des1=Des1[:,:,torch.reshape(self.R_index_permu,[-1])].reshape([Des1.shape[0],Des1.shape[1],8,8])
         cor=torch.einsum('bfag,bfg->ba',Des1,Des2)
         return torch.argmax(cor,dim=1)
 
     def forward(self,data):
-        feats0=torch.squeeze(data['feats0']) # bn,32,60
-        feats1=torch.squeeze(data['feats1']) # bn,32,60
+        feats0=torch.squeeze(data['feats0']) # bn,32,8
+        feats1=torch.squeeze(data['feats1']) # bn,32,8
         true_idxs=torch.squeeze(data['true_idx']) # bn
         yoho_0=self.PartI_net(feats0)
         yoho_1=self.PartI_net(feats1)
@@ -151,10 +151,10 @@ class PartII_train(nn.Module):
         super().__init__()
         self.cfg=cfg
 
-        self.Rgroup_npy=np.load(f'{self.cfg.SO3_related_files}/Rotation.npy').astype(np.float32)
+        self.Rgroup_npy=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy').astype(np.float32)
         self.Rgroup=torch.from_numpy(self.Rgroup_npy).cuda()
-        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/Nei_Index_in_SO3_ordered_13.npy').astype(np.int).reshape([-1])).cuda()    #nei 60*12 readin
-        self.R_index_permu=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/60_60.npy').astype(np.int)).cuda() 
+        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/Nei_Index_in_SO3_ordered_3.npy').astype(np.int).reshape([-1])).cuda()    #nei 8*12 readin
+        self.R_index_permu=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/8_8.npy').astype(np.int)).cuda() 
 
 
         self.PartI_net=PartI_train(self.cfg)
@@ -175,7 +175,7 @@ class PartII_train(nn.Module):
     def data_process(self,data):
         data=torch.squeeze(data)
         data=data[:,:,self.Nei_in_SO3]
-        data=torch.reshape(data,[data.shape[0],data.shape[1],60,13])
+        data=torch.reshape(data,[data.shape[0],data.shape[1],8,3])
         return data
 
     def PartII_SO3_Conv(self,data):#data:bn,f,gn
@@ -220,10 +220,10 @@ class PartII_test(nn.Module):
         super().__init__()
         self.cfg=cfg
 
-        self.Rgroup_npy=np.load(f'{self.cfg.SO3_related_files}/Rotation.npy').astype(np.float32)
+        self.Rgroup_npy=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy').astype(np.float32)
         self.Rgroup=torch.from_numpy(self.Rgroup_npy).cuda()
-        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/Nei_Index_in_SO3_ordered_13.npy').astype(np.int).reshape([-1])).cuda()    #nei 60*12 readin
-        self.R_index_permu=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/60_60.npy').astype(np.int)).cuda() 
+        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/Nei_Index_in_SO3_ordered_3.npy').astype(np.int).reshape([-1])).cuda()    #nei 8*12 readin
+        self.R_index_permu=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/8_8.npy').astype(np.int)).cuda() 
 
         self.Conv_init=Comb_Conv(32*4,256)
         self.PartII_SO3_Conv_layers=nn.ModuleList([Residual_Comb_Conv(256,512,256,self.Nei_in_SO3)])
@@ -245,7 +245,7 @@ class PartII_test(nn.Module):
         if len(data.size())==2:
             data=data[None,:,:]
         data=data[:,:,self.Nei_in_SO3]
-        data=torch.reshape(data,[data.shape[0],data.shape[1],60,13])
+        data=torch.reshape(data,[data.shape[0],data.shape[1],8,3])
         return data
 
     def PartII_SO3_Conv(self,data):#data:bn,f,gn
@@ -288,22 +288,22 @@ name2network={
 
 
 if __name__=='__main__':
-    Rgroup=np.load('./group_related/Rotation.npy')
-    R_perm=np.load('./group_related/60_60.npy').astype(np.int)
+    Rgroup=np.load('./group_related/Rotation_8.npy')
+    R_perm=np.load('./group_related/8_8.npy').astype(np.int)
     config,nouse=parsesI.get_config()
     model=PartI_network(config).cuda()
     model.eval()
 
     feature_origin=np.random.rand(2,3)
-    feature=torch.from_numpy(np.einsum('ab,gcb->acg',feature_origin,Rgroup).astype(np.float32)).cuda()# 2*3*60
+    feature=torch.from_numpy(np.einsum('ab,gcb->acg',feature_origin,Rgroup).astype(np.float32)).cuda()# 2*3*8
     with torch.no_grad():
         output_origin=model(feature)
     output_origin_inv=output_origin['inv'].cpu().numpy()
     output_origin=output_origin['eqv'].cpu().numpy()
     
-    for i in range(60):
+    for i in range(8):
         feature_i=feature_origin@Rgroup[i].T
-        feature_i=torch.from_numpy(np.einsum('ab,gcb->acg',feature_i,Rgroup).astype(np.float32)).cuda()# 2*3*60
+        feature_i=torch.from_numpy(np.einsum('ab,gcb->acg',feature_i,Rgroup).astype(np.float32)).cuda()# 2*3*8
         with torch.no_grad():
             output_i=model(feature_i)
         output_i_inv=output_i['inv'].cpu().numpy()
