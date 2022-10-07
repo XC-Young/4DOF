@@ -17,41 +17,9 @@ import random
 from tqdm import tqdm
 from utils.r_eval import compute_R_diff,quaternion_from_matrix
 from utils.dataset import get_dataset_name
-from utils.utils import make_non_exists_dir,random_rotation_matrix,read_pickle,save_pickle
+from utils.utils import make_non_exists_dir,random_rotation_matrix,random_z_rotation,read_pickle,save_pickle
 from utils.misc import extract_features
 from fcgf_model import load_model
-
-
-def Random_z_rotation():
-    rng = np.random.RandomState()
-    theta = np.pi * rng.uniform(-1.0, 1.0)
-    theta1 = np.pi * rng.uniform(-0.083, 0.083)
-    alpha=theta
-    beta=theta1
-    gama=theta1
-    Rzalpha=np.array([[np.cos(alpha),np.sin(alpha),0],
-                      [-np.sin(alpha),np.cos(alpha),0],
-                      [0,0,1]])
-
-    Rybeta=np.array([[np.cos(beta),0,-np.sin(beta)],
-                     [0,1,0],
-                     [np.sin(beta),0,np.cos(beta)]])
-
-    Rxgama=np.array([[1,0,0],
-                     [0,np.cos(gama),-np.sin(gama)],
-                     [0,np.sin(gama),np.cos(gama)]])
-    R=np.matmul(Rxgama,np.matmul(Rybeta,Rzalpha))
-    return R
-
-def sample_random_trans_zgroup():
-  R = np.eye(3)
-  theta = np.pi / 4.0 * random.randint(1,8)
-  alpha = theta
-  Rzalpha=np.array([[np.cos(alpha),np.sin(alpha),0],
-                    [-np.sin(alpha),np.cos(alpha),0],
-                    [0,0,1]])
-  R = Rzalpha
-  return R
 
 
 class trainset_create():
@@ -180,7 +148,7 @@ class trainset_create():
                     R_base=random_rotation_matrix()
                     pc0=pc0@R_base.T
                     pc1=pc1@R_base.T
-                    R_z=Random_z_rotation()
+                    R_z=random_z_rotation(180)
                     pc1=pc1@R_z.T   
                     R_index=self.R2DR_id(R_z)
                     R_residule=self.DeltaR(R_z,R_index)
@@ -251,7 +219,7 @@ class trainset_create():
             R_base=random_rotation_matrix()
             pc0=pc0@R_base.T
             pc1=pc1@R_base.T
-            R_z=Random_z_rotation()
+            R_z=random_z_rotation(180)
             pc1=pc1@R_z.T   
             R_index=self.R2DR_id(R_z)
             R_residule=self.DeltaR(R_z,R_index)
@@ -305,7 +273,7 @@ if __name__=="__main__":
     parser.add_argument(
         '-m',
         '--model',
-        default='./model/Backbone_large/best_val_checkpoint.pth',
+        default='./model/Backbone/best_val_checkpoint.pth',
         type=str,
         help='path to latest checkpoint (default: None)')
     parser.add_argument(

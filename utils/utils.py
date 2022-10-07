@@ -7,6 +7,7 @@ import os
 import pickle
 import numpy as np
 import torch.nn as nn
+import random
 from collections import OrderedDict
 from tensorboardX import SummaryWriter
 
@@ -81,25 +82,14 @@ def random_rotation_matrix():
     R=np.matmul(Rzgama,np.matmul(Rybeta,Rzalpha))
     return R
 
-def random_rotation_matrix_z():
-    """
-    Generates a z only random 3D rotation matrix from axis and angle.
-
-    Args:
-        numpy_random_state: numpy random state object
-
-    Returns:
-        Random rotation matrix.
-    """
+def random_z_rotation(angle):
     rng = np.random.RandomState()
-    # axis = rng.rand(3) - 0.5
-    # axis /= np.linalg.norm(axis) + 1E-8
-    theta = np.pi * rng.uniform(-1.0, 1.0)
-    theta1 = np.pi * rng.uniform(-0.083, 0.083)
-    #thetas=axis*theta
-    alpha=theta
-    beta=theta1
-    gama=theta1
+    alpha = np.pi * rng.uniform(-1*angle/180, angle/180)
+    res = rng.uniform(-1,1,2)
+    res = res/(np.sqrt(np.sum(np.square(res)))+1e-5)
+    res = res*np.pi*0.083
+    beta,gama=res[0], res[1]
+
     Rzalpha=np.array([[np.cos(alpha),np.sin(alpha),0],
                       [-np.sin(alpha),np.cos(alpha),0],
                       [0,0,1]])
@@ -114,17 +104,15 @@ def random_rotation_matrix_z():
     R=np.matmul(Rxgama,np.matmul(Rybeta,Rzalpha))
     return R
 
-def sample_random_trans_zgroup(pcd):
-  T = np.eye(4)
-  theta = np.pi / 4.0 * np.random.randint(1,8)
+def random_rotation_zgroup():
+  R = np.eye(3)
+  theta = np.pi / 4.0 * random.randint(1,8)
   alpha = theta
   Rzalpha=np.array([[np.cos(alpha),np.sin(alpha),0],
                     [-np.sin(alpha),np.cos(alpha),0],
                     [0,0,1]])
   R = Rzalpha
-  T[:3, :3] = R
-  T[:3, 3] = R.dot(-np.mean(pcd, axis=0))
-  return T
+  return R
 
 #train
 class MultiGPUWrapper(nn.Module):

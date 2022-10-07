@@ -1,7 +1,7 @@
 """
 Feature extractor for feature extraction:
 (1)extractor_PartI: YOHO group feature;
-(2)extractor_dr_index: YOHO group feature pair-->coarse rotation(index in 60);
+(2)extractor_dr_index: YOHO group feature pair-->coarse rotation(index in 8);
 (3)extractor_PartII: Residual rotation.
 """
 
@@ -10,6 +10,7 @@ Feature extractor for feature extraction:
 import os,sys
 sys.path.append('..')
 import torch
+import glob
 import numpy as np
 from tqdm import tqdm
 from utils.r_eval import matrix_from_quaternion
@@ -37,15 +38,17 @@ class extractor_PartI():
 
     #Extract
     def Extract(self,dataset):
-        #data input 5000*32*60
-        #output: 5000*32*69->save
+        #data input 5000*32*8
+        #output: 5000*32*8->save
         self._load_model()
         self.network.eval()
         FCGF_input_dir=f'{self.cfg.output_cache_fn}/Testset/{dataset.name}/FCGF_Input_Group_feature'
         YOHO_output_dir=f'{self.cfg.output_cache_fn}/Testset/{dataset.name}/YOHO_Output_Group_feature'
         make_non_exists_dir(YOHO_output_dir)
         print(f'Extracting the PartI descriptors on {dataset.name}')
-        for pc_id in tqdm(dataset.pc_ids):
+        pc_fns = glob.glob(f'{FCGF_input_dir}/*.npy')
+        for fn in tqdm(pc_fns):
+            pc_id = str.split(fn,'/')[-1][:-4]
             if os.path.exists(f'{YOHO_output_dir}/{pc_id}.npy'):continue
             Input_feature=np.load(f'{FCGF_input_dir}/{pc_id}.npy') #5000*32*60
             output_feature=[]

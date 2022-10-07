@@ -62,6 +62,7 @@ class ThrDMatchPartDataset(EvalDataset):
         self.kps_pc_fn=[f'{self.root}/Keypoints_PC/cloud_bin_{k}Keypoints.npy' for k in range(stationnum)]
         self.kps_fn=[f'{self.root}/Keypoints/cloud_bin_{k}Keypoints.txt' for k in range(stationnum)]
         self.pc_ply_paths=[f'{self.root}/PointCloud/cloud_bin_{k}.ply' for k in range(stationnum)]
+        self.pc_npy_paths=[f'{self.root}/PointCloud/cloud_bin_{k}.npy' for k in range(stationnum)]
         self.pc_txt_paths=[f'{self.root}/PointCloud/cloud_bin_{k}.txt' for k in range(stationnum)]
         self.pair_id2transform=self.parse_gt_fn(self.gt_dir)
         self.pair_ids=[tuple(v.split('-')) for v in self.pair_id2transform.keys()]
@@ -105,7 +106,7 @@ class ThrDMatchPartDataset(EvalDataset):
             pc=o3d.io.read_point_cloud(self.pc_ply_paths[int(pc_id)])
             return np.array(pc.points)
         else:
-            pc=np.loadtxt(self.pc_paths[int(pc_id)],delimiter=',')
+            pc=np.load(self.pc_npy_paths[int(pc_id)])
             return pc
     
     def get_pc_o3d(self,pc_id):
@@ -213,6 +214,39 @@ def get_dataset_name(dataset_name,origin_data_dir):
             datasets[scenes[i]].name=f'{dataset_name}/{scenes[i]}'
         return datasets
 
+    if dataset_name=='kitti':
+        datasets={}
+        datasets['wholesetname']=f'{dataset_name}'
+        scenes=['8','9','10']
+        stationnums=[4071,1591,1201]
+        for i in range(len(scenes)):
+            root_dir=f'{origin_data_dir}/{dataset_name}/'+scenes[i]
+            datasets[scenes[i]]=ThrDMatchPartDataset(root_dir,stationnums[i])
+            datasets[scenes[i]].name=f'{dataset_name}/{scenes[i]}'
+        return datasets
+    
+    if dataset_name=='kittistereo':
+        datasets={}
+        datasets['wholesetname']=f'{dataset_name}'
+        scenes=['8','9','10']
+        stationnums=[4071,1591,1201]
+        for i in range(len(scenes)):
+            root_dir=f'{origin_data_dir}/{dataset_name}/'+scenes[i]
+            datasets[scenes[i]]=ThrDMatchPartDataset(root_dir,stationnums[i])
+            datasets[scenes[i]].name=f'{dataset_name}/{scenes[i]}'
+        return datasets
+
+    if dataset_name=='kittisubseq':
+        datasets={}
+        datasets['wholesetname']=f'{dataset_name}'
+        scenes=['8','9','10']
+        stationnums=[4071,1591,1201]
+        for i in range(len(scenes)):
+            root_dir=f'{origin_data_dir}/{dataset_name}/'+scenes[i]
+            datasets[scenes[i]]=ThrDMatchPartDataset(root_dir,stationnums[i])
+            datasets[scenes[i]].name=f'{dataset_name}/{scenes[i]}'
+        return datasets
+
     else:
         raise NotImplementedError
 
@@ -236,7 +270,7 @@ class Enhanced_train_dataset_PartI(Dataset):
         if self.is_training:
             self.name_pair_ids=read_pickle(cfg.train_pcpair_list_fn) #list: name id0 id1 pt1 pt2
         else:
-            self.name_pair_ids=read_pickle(cfg.val_pppair_list_fn)[0:3000]   #list: name id0 id1 pt1 pt2
+            self.name_pair_ids=read_pickle(cfg.val_pppair_list_fn)[0:384000]   #list: name id0 id1 pt1 pt2
 
     def R2DR_id(self,R):
         min_diff=180
@@ -271,7 +305,7 @@ class Enhanced_train_dataset_PartII(Dataset):
         if self.is_training:
             self.name_pair_ids=read_pickle(cfg.train_pcpair_list_fn) #list: name id0 id1 pt1 pt2
         else:
-            self.name_pair_ids=read_pickle(cfg.val_pppair_list_fn)[0:3000]   #list: name id0 id1 pt1 pt2
+            self.name_pair_ids=read_pickle(cfg.val_pppair_list_fn)[0:384000]   #list: name id0 id1 pt1 pt2
 
     def R2DR_id(self,R):
         min_diff=180

@@ -4,6 +4,7 @@ Common functions using open3d in the whole pipeline.
 
 import open3d as o3d
 import copy
+import numpy as np
 
 def read_ply(road):
     return o3d.io.read_point_cloud(road)
@@ -32,5 +33,12 @@ def draw_registration_result_with_keys(source, target, keys, transformation):
     target_temp.paint_uniform_color([0, 0.651, 0.929])
     keys_pc.paint_uniform_color([1,0,0])
     source_temp.transform(transformation)
-    o3d.visualization.draw_geometries([keys_pc,source_temp, target_temp])
+    vis = o3d.visualization.draw_geometries([keys_pc,source_temp, target_temp])
+    # 可视化参数设置
+    opt = vis.get_render_option()
+    # 设置背景色
+    opt.background_color = np.asarray([0, 0, 0])
+    # 设置点云大小
+    opt.point_size = 2
+    opt.show_coordinate_frame = True
     

@@ -24,11 +24,58 @@ def R_pre_log(dataset,save_dir):
     writer.close()
 
 
+class refiner:
+    def __init__(self):
+        pass
+
+    def center_cal(self,key_m0,key_m1,scores):
+        key_m0=key_m0*scores[:,None]
+        key_m1=key_m1*scores[:,None]
+        key_m0=np.sum(key_m0,axis=0)
+        key_m1=np.sum(key_m1,axis=0)
+        return key_m0,key_m1
+
+    def SVDR_w(self,beforerot,afterrot,scores):# beforerot afterrot Scene2,Scene1
+        weight=np.diag(scores)
+        H=np.matmul(np.matmul(np.transpose(afterrot),weight),beforerot)
+        U,Sigma,VT=np.linalg.svd(H)
+        return np.matmul(U,VT)
+
+    def R_cal(self,key_m0,key_m1,center0,center1,scores):
+        key_m0=key_m0-center0[None,:]
+        key_m1=key_m1-center1[None,:]
+        return self.SVDR_w(key_m1,key_m0,scores)
+
+    def t_cal(self,center0,center1,R):
+        return center0-center1@R.T
+
+    def Rt_cal(self,key_m0,key_m1,scores):
+        scores=scores/np.sum(scores)
+        center0,center1=self.center_cal(key_m0,key_m1,scores)
+        R=self.R_cal(key_m0,key_m1,center0,center1,scores)
+        t=self.t_cal(center0,center1,R)
+        return R,t
+    
+    def Refine_trans(self,key_m0,key_m1,T,scores,inlinerdist=None):
+        key_m1_t=transform_points(key_m1,T)
+        diff=np.sum(np.square(key_m0-key_m1_t),axis=-1)
+        overlap=np.where(diff<inlinerdist*inlinerdist)[0]
+            
+        scores=scores[overlap]
+        key_m0=key_m0[overlap]
+        key_m1=key_m1[overlap]
+        R,t=self.Rt_cal(key_m0, key_m1, scores)
+        Tnew=np.eye(4)
+        Tnew[0:3,0:3]=R
+        Tnew[0:3,3]=t
+        return Tnew
+
 
 class yohoc:
     def __init__(self,cfg):
         self.cfg=cfg
         self.inliner_dist=cfg.ransac_c_inlinerdist
+        self.refiner = refiner()
 
 
     def DR_statictic(self,DR_indexs):
@@ -135,17 +182,24 @@ class yohoc:
                         best_3p_in_0=kps0_init
                         best_3p_in_1=kps1_init
                         recall_time=iter_ransac
+                # refine:
+                refine_times = 10
+                scores = np.ones([Keys_m0.shape[0]])
+                for refine_i in range(refine_times):
+                    thres = 0.5 + ((2-0.5)/refine_times)*(refine_times-refine_i)
+                    best_trans_ransac=self.refiner.Refine_trans(Keys_m0,Keys_m1,best_trans_ransac,scores,inlinerdist=self.inliner_dist*thres)
                 #save:
                 np.savez(f'{Save_dir}/{id0}-{id1}.npz',trans=best_trans_ransac, center=np.concatenate([best_3p_in_0,best_3p_in_1],axis=0),recalltime=recall_time)
-
+                
         R_pre_log(dataset,Save_dir)
 
-
+    
 
 class yohoc_mul:
     def __init__(self,cfg):
         self.cfg=cfg
         self.inliner_dist=cfg.ransac_c_inlinerdist
+        self.refiner = refiner()
 
 
     def DR_statictic(self,DR_indexs):
@@ -201,14 +255,14 @@ class yohoc_mul:
             datasetname=f'3d{dataset.name[4:]}'
         else:
             datasetname=dataset.name
-        Keys_dir=f'{self.cfg.origin_data_dir}/{datasetname}/Keypoints_PC'
+        # Keys_dir=f'{self.cfg.origin_data_dir}/{datasetname}/Keypoints_PC'
 
         id0,id1=pair
         #if os.path.exists(f'{Save_dir}/{id0}-{id1}.npz'):continue
         gt=dataset.get_transform(id0,id1)
         #Keypoints
-        Keys0=np.load(f'{Keys_dir}/cloud_bin_{id0}Keypoints.npy')
-        Keys1=np.load(f'{Keys_dir}/cloud_bin_{id1}Keypoints.npy')
+        Keys0=dataset.get_kps(id0)
+        Keys1=dataset.get_kps(id1)
         #Key_pps
         pps=np.load(f'{match_dir}/{id0}-{id1}.npy')
         Keys_m0=Keys0[pps[:,0]]
@@ -249,6 +303,12 @@ class yohoc_mul:
                     best_3p_in_0=kps0_init
                     best_3p_in_1=kps1_init
                     recall_time=iter_ransac
+            # refine:
+            refine_times = 10
+            scores = np.ones([Keys_m0.shape[0]])
+            for refine_i in range(refine_times):
+                thres = 0.5 + ((2-0.5)/refine_times)*(refine_times-refine_i)
+                best_trans_ransac=self.refiner.Refine_trans(Keys_m0,Keys_m1,best_trans_ransac,scores,inlinerdist=self.inliner_dist*thres)
             np.savez(f'{Save_dir}/{id0}-{id1}.npz',trans=best_trans_ransac, center=np.concatenate([best_3p_in_0,best_3p_in_1],axis=0),recalltime=recall_time)
 
 
@@ -282,6 +342,7 @@ class yohoo:
         self.inliner_dist=cfg.ransac_o_inlinerdist
         self.Nei_in_SO3=np.load(f'{self.cfg.SO3_related_files}/8_8.npy')
         self.Rgroup=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy')
+        self.refiner = refiner()
 
     def overlap_cal(self,key_m0,key_m1,T):
         key_m1=transform_points(key_m1,T)
@@ -334,6 +395,12 @@ class yohoo:
                     best_overlap=overlap
                     best_trans_ransac=T
                     recall_time=t_id
+            # refine:
+            refine_times = 10
+            scores = np.ones([Keys_m0.shape[0]])
+            for refine_i in range(refine_times):
+                thres = 0.5 + ((2-0.5)/refine_times)*(refine_times-refine_i)
+                best_trans_ransac=self.refiner.Refine_trans(Keys_m0,Keys_m1,best_trans_ransac,scores,inlinerdist=self.inliner_dist*thres)
             #save:
             np.savez(f'{Save_dir}/{id0}-{id1}.npz',trans=best_trans_ransac, recalltime=recall_time)
 

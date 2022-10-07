@@ -2,3 +2,5 @@ data
 knn_search
 MinkowskiEngine
 model
+__pycache__
+
