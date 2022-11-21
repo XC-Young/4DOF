@@ -200,6 +200,7 @@ The generalization results on the outdoor WHU-TLS dataset can be got as follows:
 
 ## Generalize to the KITTI dataset
 
+```
 python Test.py --Part PartI --max_iter 1000 --dataset kitti --ransac_d 0.5 --tau_2 2 #YOHO-C on KITTI
 python Test.py --Part PartII --max_iter 1000 --dataset kitti --ransac_d 0.5 --tau_2 2 #YOHO-O on KITTI
 
@@ -208,6 +209,10 @@ python Test.py --Part PartII --max_iter 1000 --dataset kittistereo --ransac_d 1.
 
 python Test.py --Part PartI --max_iter 1000 --dataset kittisubseq --ransac_d 1.5 --tau_2 2 #YOHO-C on KITTI_Sub Sequence
 python Test.py --Part PartII --max_iter 1000 --dataset kittisubseq --ransac_d 1.5 --tau_2 2 #YOHO-O on KITTI_Sub Sequence
+
+python Test.py --Part PartI --max_iter 1000 --dataset kittiscst --ransac_d 1.5 --tau_2 2 #YOHO-C on KITTI_Scst
+python Test.py --Part PartII --max_iter 1000 --dataset kittiscst --ransac_d 1.5 --tau_2 2 #YOHO-O on KITTI_Scst
+```
 
 ## Customize YOHO according to your needs
 

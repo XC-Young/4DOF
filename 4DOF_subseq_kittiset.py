@@ -3,7 +3,7 @@ import os
 from re import sub
 import torch
 import numpy as np
-import glob, random
+import glob
 import open3d as o3d
 from tqdm import tqdm
 from utils.utils import *
@@ -11,12 +11,18 @@ from fcgf_model import load_model
 from utils.misc import extract_features
 from utils.r_eval import compute_R_diff
 
+'''
+pc0: stereo PC
+pc1: scan PC
+Ground truth transformation is applied to pc1
+'''
+
 class subseq_generate:
   def __init__(self):
     self.testseq = [8,9,10]
     self.stereodir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/KittiStereo'
     self.scandir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/kitti'
-    self.savedir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/subseq'
+    self.savedir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/kittisubseq'
     self.predir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/YOHO_FCGF/Testset'
     self.load_model()
     self.downsamplevalue = 0.2
@@ -248,8 +254,7 @@ class subseq_generate:
         'pc':[],
         'pair':{}
       }
-      stfns = glob.glob(f'{self.savedir}/stereo/{i}/could_bin_*.ply')
-      scfns = glob.glob(f'{self.savedir}/scan/{i}/could_bin_*.ply')
+      stfns = glob.glob(f'{self.savedir}/kittistereo/{i}/could_bin_*.ply')
       for fn in stfns:
         pair = str.split(fn,'/')[-1]
         pair = str.split(pair,'.')[0]
@@ -267,8 +272,8 @@ class subseq_generate:
       seq = self.subseq[f'{i}']
       icpdir = f'{self.savedir}/icp'
       make_non_exists_dir(icpdir)
-      stdir = f'{self.savedir}/stereo/{i}'
-      scdir = f'{self.savedir}/scan/{i}'
+      stdir = f'{self.savedir}/kittistereo/{i}'
+      scdir = f'{self.savedir}/kittiscan/{i}'
       for pair,trans in tqdm(seq['pair'].items()):
         id0,id1 = str.split(pair,'-')
         icpfn = f'{icpdir}/{i}_{id0}_{id1}.npy'
@@ -406,7 +411,7 @@ class subseq_generate:
   def generate_test_gfeats(self):
       for i in self.testseq:
           seq = self.subseq[f'{i}']
-          savedir = f'./data/YOHO_FCGF/Testset/subseq/{i}/FCGF_Input_Group_feature'
+          savedir = f'./data/YOHO_FCGF/Testset/kittisubseq/{i}/FCGF_Input_Group_feature'
           make_non_exists_dir(savedir)
           for pc in tqdm(seq['pc']):
               feats = []
@@ -427,6 +432,6 @@ if __name__=='__main__':
   # generator.icp()
   generator.loadset()
   # generator.load_save_pc()
-  generator.generate_kps()
+  # generator.generate_kps()
   generator.generate_test_gfeats()
 

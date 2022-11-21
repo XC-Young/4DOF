@@ -80,12 +80,12 @@ class yohoc:
 
     def DR_statictic(self,DR_indexs):
         R_index_pre_statistic={}
-        for i in range(60):
+        for i in range(8):
             R_index_pre_statistic[i]=[]
         for t in range(DR_indexs.shape[0]):
             R_index_pre_statistic[DR_indexs[t]].append(t)
         R_index_pre_probability=[]
-        for i in range(60):
+        for i in range(8):
             if len(R_index_pre_statistic[i])<2:
                 R_index_pre_probability.append(0)
             else:
@@ -166,7 +166,7 @@ class yohoc:
                 while iter_ransac<max_iter:
                     if exec_time>max_time:break
                     exec_time+=1
-                    R_index=np.random.choice(range(60),p=R_index_pre_probability)
+                    R_index=np.random.choice(range(8),p=R_index_pre_probability)
                     if (len(R_index_pre_statistic[R_index])<2):
                         continue
                     iter_ransac+=1
@@ -204,12 +204,12 @@ class yohoc_mul:
 
     def DR_statictic(self,DR_indexs):
         R_index_pre_statistic={}
-        for i in range(60):
+        for i in range(8):
             R_index_pre_statistic[i]=[]
         for t in range(DR_indexs.shape[0]):
             R_index_pre_statistic[DR_indexs[t]].append(t)
         R_index_pre_probability=[]
-        for i in range(60):
+        for i in range(8):
             if len(R_index_pre_statistic[i])<2:
                 R_index_pre_probability.append(0)
             else:
@@ -288,7 +288,7 @@ class yohoc_mul:
             while iter_ransac<max_iter:
                 if exec_time>max_time:break
                 exec_time+=1
-                R_index=np.random.choice(range(60),p=R_index_pre_probability)
+                R_index=np.random.choice(range(8),p=R_index_pre_probability)
                 if (len(R_index_pre_statistic[R_index])<2):
                     continue
                 iter_ransac+=1

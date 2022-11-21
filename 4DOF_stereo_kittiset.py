@@ -18,8 +18,9 @@ class generate_kitti:
         self.valseq = [6,7]
         self.testseq = [8,9,10]
         self.basedir = f'/home/hdmap/yxcdata/03_Data/KITTI/01_odometry'
-        self.savedir = f'./data/origin_data/KittiStereo'
-        self.yohosavedir = f'./data/YOHO_FCGF/KittiStereo'
+        self.savedir = f'./data/origin_data/kittistereo'
+        make_non_exists_dir(self.savedir)
+        self.yohosavedir = f'./data/YOHO_FCGF/kittistereo'
         self.load_model()
         self.G = np.load(f'./group_related/Rotation_8.npy')
         self.knn=knn_module.KNN(1)
@@ -56,11 +57,13 @@ class generate_kitti:
 
     def Disp2PC(self):
         print('Disparity to point cloud')
-        for i in self.testseq:
+        for i in self.valseq:
             seq = self.kitti[f'{i}']
             seqname = f'{i}'.zfill(2)
             pc_save = f'{self.savedir}/{i}/PointCloud'
             make_non_exists_dir(pc_save)
+            disp_save = f'{pc_save}/disparity'
+            make_non_exists_dir(disp_save)
             calibfile = open(f'{self.basedir}/data_odometry_calib/dataset/sequences/{seqname}/calib.txt','r')
             calibdata = calibfile.readlines()
             for row in calibdata:
@@ -82,14 +85,14 @@ class generate_kitti:
                 depthimg = cv2.imread(f'{self.basedir}/data_odometry_color/dataset/sequences/{seqname}/Disp/{imgname}.png',cv2.IMREAD_UNCHANGED)
                 # Crop the size of color image to depth image directly
                 colorimg = cv2.resize(colorimg,(1232,368),interpolation=cv2.INTER_LINEAR)
-
                 points = []
                 rgbs = []
+                disps = []
                 for row in range(depthimg.shape[0]):
                     for col in range(depthimg.shape[1]):
                         d = depthimg[row, col]
                         d = d/255.0
-                        if d>=6:
+                        if d>=8:
                             z_origin = fu1*baseline/d
                             x_origin = (col-cu1)*z_origin/fu1
                             y_origin = (row-cv1)*z_origin/fv1
@@ -102,15 +105,17 @@ class generate_kitti:
                             rgbs.append(rgb[None,:])
                             point = np.array([x,y,z])
                             points.append(point[None,:])
+                            disps.append(d)
                 rgbs = np.concatenate(rgbs,axis=0)/255
                 points = np.concatenate(points,axis=0)
+                disps = np.array(disps)
                 ply = o3d.geometry.PointCloud()
                 ply.points = o3d.utility.Vector3dVector(points)
                 ply.colors = o3d.utility.Vector3dVector(rgbs)
                 o3d.io.write_point_cloud(f'{pc_save}/cloud_bin_{pc1}.ply',ply)
                 np.save(f'{pc_save}/cloud_bin_{pc1}.npy',points)
-                
-    
+                np.save(f'{disp_save}/disp_{pc1}.npy',disps)
+
     def generate_gt(self):
         print('Generate gr.npy')
         for i in self.testseq:
@@ -189,6 +194,8 @@ class generate_kitti:
             seq = self.kitti[f'{i}']
             kpsdir = f'{self.savedir}/{i}/Keypoints'
             make_non_exists_dir(kpsdir)
+            dispdir = f'{self.savedir}/{i}/Disparity'
+            make_non_exists_dir(dispdir)
             for pair, trans in tqdm(seq['pair'].items()):
                 pc0,pc1=str.split(pair,'-')
                 pc0 = int(pc0)
@@ -204,9 +211,96 @@ class generate_kitti:
                 np.random.shuffle(index1)
                 index0 = index0[0:5000]
                 index1 = index1[0:5000]
+                # save keypoints' disparity
+                disp0 = np.load(f'{self.savedir}/{i}/PointCloud/disparity/disp_{pc0}.npy')
+                disp1 = np.load(f'{self.savedir}/{i}/PointCloud/disparity/disp_{pc1}.npy')
+                disps0 = []
+                disps1 = []
+                for j in range(5000):
+                    disps0.append(disp0[index0[j]])
+                    disps1.append(disp1[index1[j]])
+                disps0 = np.array(disps0)
+                disps1 = np.array(disps1)
+                np.save(f'{dispdir}/disp_{pc0}.npy',disp0)
+                np.save(f'{dispdir}/disp_{pc1}.npy',disp1)
+
                 np.savetxt(kpsfn0, index0)
                 np.savetxt(kpsfn1, index1)
                 
+    def generate_kps_new(self):
+        print('Generate key points for stereo and scan pc.')
+        for i in self.valseq:
+            seq = self.kitti[f'{i}']
+            kpsdir = f'{self.savedir}/{i}/Keypoints'
+            make_non_exists_dir(kpsdir)
+            kpcddir = f'{self.savedir}/{i}/Keypoints_PC'
+            make_non_exists_dir(kpcddir)
+            dispdir = f'{self.savedir}/{i}/Disparity'
+            make_non_exists_dir(dispdir)
+            lenths = []
+            for pc in tqdm(seq['pc']):
+                kpsfn = f'{kpsdir}/cloud_bin_{pc}Keypoints.txt'
+                disp = np.load(f'{self.savedir}/{i}/PointCloud/disparity/disp_{pc}.npy')
+                # os.system(f'mv {self.savedir}/{key}/PointCloud/{p}.ply {self.savedir}/{key}/PointCloud/cloud_bin_{p}.ply')
+                # pcd = np.load(f'{self.savedir}/{i}/PointCloud/cloud_bin_{pc}.npy')
+
+                """ # Disparity normalization
+                # inverse weight2
+                disp0 = 1/disp0
+                disp1 = 1/disp1
+                sum0 = np.sum(disp0)
+                sum1 = np.sum(disp1)
+                disp0=disp0/sum0
+                disp1=disp1/sum1
+                index0 = np.random.choice( np.arange(pcd0.shape[0]), 5000, p = disp0, replace = False)
+                index1 = np.random.choice( np.arange(pcd1.shape[0]), 5000, p = disp1, replace = False) """
+
+                # voxel down sample
+                ply = o3d.io.read_point_cloud(f'{self.savedir}/{i}/PointCloud/cloud_bin_{pc}.ply')
+                ply = ply.voxel_down_sample(0.35)
+                pcd = np.array(ply.points).astype(np.float32)
+                lenth = pcd.shape[0]
+                assert lenth>=5000
+                index = np.arange(pcd.shape[0])
+                np.random.shuffle(index)
+                index = index[0:5000]
+                np.savetxt(kpsfn, index)
+
+                # save keypoints' disparity
+                disps = []
+                for j in range(5000):
+                    disps.append(disp[index[j]])
+                disps = np.array(disps)
+                np.save(f'{dispdir}/disp_{pc}.npy',disp)
+                # save keypoints' pc
+                kpcd = pcd[index]
+                np.save(f'{kpcddir}/cloud_bin_{pc}Keypoints.npy',kpcd)
+
+    def save_kpdisp(self):
+        for i in self.testseq:
+            seq = self.kitti[f'{i}']
+            kpsdir = f'{self.savedir}/{i}/Keypoints'
+            make_non_exists_dir(kpsdir)
+            dispdir = f'{self.savedir}/{i}/Disparity'
+            make_non_exists_dir(dispdir)
+            for pair, trans in tqdm(seq['pair'].items()):
+                pc0,pc1=str.split(pair,'-')
+                pc0 = int(pc0)
+                pc1 = int(pc1)
+                key0 = np.loadtxt(f'{self.savedir}/{i}/Keypoints/cloud_bin_{pc0}Keypoints.txt').astype(np.int64)
+                key1 = np.loadtxt(f'{self.savedir}/{i}/Keypoints/cloud_bin_{pc1}Keypoints.txt').astype(np.int64)
+                disp0 = np.load(f'{self.savedir}/{i}/PointCloud/disparity/disp_{pc0}.npy')
+                disp1 = np.load(f'{self.savedir}/{i}/PointCloud/disparity/disp_{pc1}.npy')
+                # save keypoints' disparity
+                disps0 = []
+                disps1 = []
+                for j in range(5000):
+                    disps0.append(disp0[key0[j]])
+                    disps1.append(disp1[key1[j]])
+                disps0 = np.array(disps0)
+                disps1 = np.array(disps1)
+                np.save(f'{dispdir}/disp_{pc0}.npy',disp0)
+                np.save(f'{dispdir}/disp_{pc1}.npy',disp1)
 
     def load_model(self):
         checkpoint = torch.load('./model/Backbone/best_val_checkpoint.pth')
@@ -231,6 +325,7 @@ class generate_kitti:
             index = np.arange(pc.shape[0])
             np.random.shuffle(index)
             pc = pc[index[0:40000]]
+            # disp = disp[index[0:40000]]
         for gid in range(self.G.shape[0]):
             feats_g = []
             g = self.G[gid]
@@ -259,18 +354,18 @@ class generate_kitti:
     def generate_test_gfeats(self):
         for i in self.testseq:
             seq = self.kitti[f'{i}']
-            savedir = f'./data/YOHO_FCGF/Testset/KittiStereo/{i}/FCGF_Input_Group_feature'
+            savedir = f'./data/YOHO_FCGF/Testset/kittistereo/{i}/FCGF_Input_Group_feature'
             make_non_exists_dir(savedir)
             for pc in tqdm(seq['pc']):
                 feats = []
                 # load pointcloud and keypoints
                 xyz = np.load(f'{self.savedir}/{i}/PointCloud/cloud_bin_{pc}.npy')
-                key = np.loadtxt(f'{self.savedir}/{i}/Keypoints/cloud_bin_{pc}Keypoints.txt').astype(np.int64)
-                key = xyz[key]
+                # key = np.loadtxt(f'{self.savedir}/{i}/Keypoints/cloud_bin_{pc}Keypoints.txt').astype(np.int64)
+                # key = xyz[key]
+                key = np.load(f'{self.savedir}/{i}/Keypoints_PC/cloud_bin_{pc}Keypoints.npy')
                 feats = self.generate_scan_gfeats(xyz, key)
                 np.save(f'{savedir}/{pc}.npy', feats)
                           
-
 if __name__=='__main__':
     generator = generate_kitti()
     generator.loadset()
@@ -278,7 +373,8 @@ if __name__=='__main__':
     # generator.generate_gt()
     # generator.gt_log()
     # generator.load_save_pc()
-    # generator.generate_kps()
+    # generator.generate_kps_new()
+    # generator.save_kpdisp()
     # generator.trainval_list()
     
     # test

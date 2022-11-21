@@ -50,6 +50,13 @@ class generate_kitti:
                     seq['pc'].append(pair[1])
                 if not pair[2] in seq['pc']:
                     seq['pc'].append(pair[2])
+                # for 555 (seq8 14-59 nedds to remove)
+                """ if int(pair[2])-int(pair[1])>2:
+                    seq['pair'][f'{pair[1]}-{pair[2]}'] = trans
+                    if not pair[1] in seq['pc']:
+                        seq['pc'].append(pair[1])
+                    if not pair[2] in seq['pc']:
+                        seq['pc'].append(pair[2]) """
             self.kitti[f'{i}'] = seq
     
     def gt_log(self):

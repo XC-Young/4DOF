@@ -247,6 +247,17 @@ def get_dataset_name(dataset_name,origin_data_dir):
             datasets[scenes[i]].name=f'{dataset_name}/{scenes[i]}'
         return datasets
 
+    if dataset_name=='kittiscst':
+        datasets={}
+        datasets['wholesetname']=f'{dataset_name}'
+        scenes=['8','9']
+        stationnums=[4071,4071]
+        for i in range(len(scenes)):
+            root_dir=f'{origin_data_dir}/{dataset_name}/'+scenes[i]
+            datasets[scenes[i]]=ThrDMatchPartDataset(root_dir,stationnums[i])
+            datasets[scenes[i]].name=f'{dataset_name}/{scenes[i]}'
+        return datasets
+
     else:
         raise NotImplementedError
 
