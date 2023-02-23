@@ -255,7 +255,8 @@ class generate_kitti:
                 index0 = np.random.choice( np.arange(pcd0.shape[0]), 5000, p = disp0, replace = False)
                 index1 = np.random.choice( np.arange(pcd1.shape[0]), 5000, p = disp1, replace = False) """
 
-                # voxel down sample
+                # It's wrong
+                """ # voxel down sample
                 ply = o3d.io.read_point_cloud(f'{self.savedir}/{i}/PointCloud/cloud_bin_{pc}.ply')
                 ply = ply.voxel_down_sample(0.35)
                 pcd = np.array(ply.points).astype(np.float32)
@@ -274,7 +275,7 @@ class generate_kitti:
                 np.save(f'{dispdir}/disp_{pc}.npy',disp)
                 # save keypoints' pc
                 kpcd = pcd[index]
-                np.save(f'{kpcddir}/cloud_bin_{pc}Keypoints.npy',kpcd)
+                np.save(f'{kpcddir}/cloud_bin_{pc}Keypoints.npy',kpcd) """
 
     def save_kpdisp(self):
         for i in self.testseq:
