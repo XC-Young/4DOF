@@ -102,7 +102,7 @@ class Evaluator_PartI:
                     id0,id1=pair
                     wholenum+=1
                     gt=dataset.get_transform(id0,id1)
-                    pre=np.load(f'data/YOHO_FCGF/Testset/{dataset.name}/Match/YOHO_C/1000iters/{id0}-{id1}.npz')['trans']
+                    pre=np.load(f'data/YOHO_FCGF/Testset/{dataset.name}/Match/YOHO_C/{self.cfg.max_iter}iters/{id0}-{id1}.npz')['trans']
                     tdiff = np.linalg.norm(pre[0:3,-1]-gt[0:3,-1])
                     Rdiff=compute_R_diff(gt[0:3,0:3],pre[0:3,0:3])
                     if tdiff<=2 and Rdiff<=5:
@@ -207,7 +207,7 @@ class Evaluator_PartII:
                     id0,id1=pair
                     wholenum+=1
                     gt=dataset.get_transform(id0,id1)
-                    pre=np.load(f'data/YOHO_FCGF/Testset/{dataset.name}/Match/YOHO_O/1000iters/{id0}-{id1}.npz')['trans']
+                    pre=np.load(f'data/YOHO_FCGF/Testset/{dataset.name}/Match/YOHO_O/{self.cfg.max_iter}iters/{id0}-{id1}.npz')['trans']
                     tdiff = np.linalg.norm(pre[0:3,-1]-gt[0:3,-1])
                     Rdiff=compute_R_diff(gt[0:3,0:3],pre[0:3,0:3])
                     if tdiff<=2 and Rdiff<=5:

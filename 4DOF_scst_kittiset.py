@@ -19,8 +19,10 @@ Ground truth transformation is applied to pc1
 
 class scst_generate:
   def __init__(self):
-    self.testseq = [8,9]
-    self.scstdir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/kittiscst'
+    # self.testseq = [8,9]
+    # self.scstdir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/kittiscst'
+    self.testseq = [10]
+    self.scstdir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/kitti+360'
     self.predir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/YOHO_FCGF/Testset'
     self.load_model()
     self.G = np.load(f'./group_related/Rotation_8.npy')
@@ -46,7 +48,9 @@ class scst_generate:
 
   def loadset(self):
     self.scst = {}
-    for i in range(8,10):
+    a = int(self.testseq[0])
+    b = int(self.testseq[-1])+1
+    for i in range(a,b):
       seq = {
             'pc':[],
             'pair':{}
@@ -56,7 +60,7 @@ class scst_generate:
         lines = f.readlines()
         pair_num = len(lines)//5
         for k in range(pair_num):
-          id0,id1=np.fromstring(lines[k*5],dtype=np.float32,sep='\t')[0:2]
+          id0,id1=np.fromstring(lines[k*5],dtype=np.float32,sep=' ')[0:2]
           id0=int(id0)
           id1=int(id1)
           row0=np.fromstring(lines[k*5+1],dtype=np.float32,sep=' ')
@@ -122,6 +126,31 @@ class scst_generate:
             ply0 = o3d.geometry.PointCloud()
             ply0.points = o3d.utility.Vector3dVector(pc0)
             o3d.io.write_point_cloud(f'{savedir}/cloud_bin_{pc}.ply',ply0)
+      if i==10:
+        savedir = f'{self.scstdir}/{i}/Rot_PointCloud'
+        make_non_exists_dir(savedir)
+        rotdir = f'{savedir}/rotation'
+        make_non_exists_dir(rotdir)
+        for pair,trans in tqdm(seq['pair'].items()):
+          id0,id1 = str.split(pair,'-')
+          ply0 = o3d.io.read_point_cloud(f'{srcdir}/cloud_bin_{id0}.ply')
+          ply1 = o3d.io.read_point_cloud(f'{srcdir}/cloud_bin_{id1}.ply')
+          pcd0 = np.array(ply0.points)
+          pcd1 = np.array(ply1.points)
+          if(len(pcd0)==0):
+             print(id0)
+          if(len(pcd1)==0):
+             print(id1)
+          np.save(f'{savedir}/cloud_bin_{id1}.npy',pcd1)
+          o3d.io.write_point_cloud(f'{savedir}/cloud_bin_{id1}.ply',ply1)
+          # add random transformation to pc0
+          T_z = self.sample_random_trans_z(pcd0)
+          pcd0 = self.apply_transform(pcd0,T_z)
+          np.save(f'{rotdir}/{id0}.npy',T_z)
+          np.save(f'{savedir}/cloud_bin_{id0}.npy',pcd0)
+          ply0 = o3d.geometry.PointCloud()
+          ply0.points = o3d.utility.Vector3dVector(pcd0)
+          o3d.io.write_point_cloud(f'{savedir}/cloud_bin_{id0}.ply',ply0)
 
       gtfn = f'{savedir}/gt.log'
       writer=open(gtfn,'w')
@@ -183,9 +212,6 @@ class scst_generate:
           np.savetxt(kpsfn1, index1)
           # save keypoints' disparity
           dispss = disps[index1]
-          # d_max = np.max(dispss)
-          # d_min = np.min(dispss)
-          # dispss = (dispss-d_min)/(d_max-d_min)
           np.save(f'{dispdir}/disp_{id1}.npy',dispss)
           # save keypoints' pc
           kpcd1 = pcd1[index1]
@@ -248,14 +274,13 @@ class scst_generate:
   def generate_test_gfeats(self):
       for i in self.testseq:
           seq = self.scst[f'{i}']
-          savedir = f'./data/YOHO_FCGF/Testset/kittiscst/{i}/FCGF_Input_Group_feature'
+          dataset = str.split(self.scstdir,'/')[-1]
+          savedir = f'./data/YOHO_FCGF/Testset/{dataset}/{i}/FCGF_Input_Group_feature'
           make_non_exists_dir(savedir)
           for pc in tqdm(seq['pc']):
             feats = []
             # load pointcloud and keypoints
             xyz = np.load(f'{self.scstdir}/{i}/PointCloud/cloud_bin_{pc}.npy')
-            # key = np.loadtxt(f'{self.scstdir}/{i}/Keypoints/cloud_bin_{pc}Keypoints.txt').astype(np.int64)
-            # key = xyz[key]
             key = np.load(f'{self.scstdir}/{i}/Keypoints_PC/cloud_bin_{pc}Keypoints.npy')
             feats = self.generate_scan_gfeats(xyz, key)
             np.save(f'{savedir}/{pc}.npy', feats)
@@ -263,6 +288,6 @@ class scst_generate:
 if __name__=='__main__':
   generator = scst_generate()
   generator.loadset()
-  generator.generate_kps()
   # generator.load_save_pc()
+  # generator.generate_kps()
   generator.generate_test_gfeats()

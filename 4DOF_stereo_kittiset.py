@@ -77,7 +77,7 @@ class generate_kitti:
                 if caliblist[0]=='P3:':
                     fu2 = float(caliblist[1])
                     fubs2 = float(caliblist[4])
-            baseline = abs(-fubs2/fu2+fubs1/fu1)
+            baseline = abs(-fubs2/fu2+fubs1/fu1) #0.5379044881339211
             for pair,trans in tqdm(seq['pair'].items()):
                 pc0,pc1 = str.split(pair,'-')
                 imgname = f'{pc1}'.zfill(6)
@@ -115,6 +115,57 @@ class generate_kitti:
                 o3d.io.write_point_cloud(f'{pc_save}/cloud_bin_{pc1}.ply',ply)
                 np.save(f'{pc_save}/cloud_bin_{pc1}.npy',points)
                 np.save(f'{disp_save}/disp_{pc1}.npy',disps)
+
+    def Disp2PC_kitti360(self):
+      print('Disparity to point cloud')
+      pc_save = f'{self.savedir}/PointCloud'
+      make_non_exists_dir(pc_save)
+      disp_save = f'{pc_save}/disparity'
+      make_non_exists_dir(disp_save)
+      fu1 = 552.554261
+      cu1 = 682.049453-91
+      # cu1 = 682.049453
+      fv1 = 552.554261
+      cv1 = 238.769549-3
+      # cv1 = 238.769549
+      # baseline = 328.318735/fu1
+      baseline = 0.60
+      T_cam2vel = np.array([[0.04307104361,-0.08829286498,0.995162929,0.8043914418],[-0.999004371,0.007784614041,0.04392796942,0.2993489574],[-0.01162548558,-0.9960641394,-0.08786966659,-0.1770225824]])
+      fns = glob.glob(f'{self.imgdir}/image_00/data_rect/*.png')
+      for fn in tqdm(fns):
+          name = str.split(fn,'/')[-1]
+          name = str.split(name,'.')[0]
+          pc_num = int(name)
+          colorimg = cv2.imread(f'{self.imgdir}/image_00/data_rect/{name}.png')
+          depthimg = cv2.imread(f'{self.imgdir}/Disp_lac/{name}.png',cv2.IMREAD_UNCHANGED)
+          colorimg = colorimg[3:373,91:1317]
+          colorimg = cv2.resize(colorimg,(1232,368),interpolation=cv2.INTER_LINEAR)
+          points = []
+          rgbs = []
+          disps = []
+          for row in range(depthimg.shape[0]):
+              for col in range(depthimg.shape[1]):
+                  d = depthimg[row, col]
+                  d = d/255.0
+                  if d>=8:
+                      z = fu1*baseline/d
+                      x = (col-cu1)*z/fu1
+                      y = (row-cv1)*z/fv1
+                      bgr = colorimg[row, col]
+                      rgb = np.array([bgr[2],bgr[1],bgr[0]])
+                      rgbs.append(rgb[None,:])
+                      point = np.array([x,y,z])
+                      point = self.apply_transform(point,T_cam2vel)
+                      points.append(point[None,:])
+                      disps.append(d)
+          rgbs = np.concatenate(rgbs,axis=0)/255
+          points = np.concatenate(points,axis=0)
+          disps = np.array(disps)
+          ply = o3d.geometry.PointCloud()
+          ply.points = o3d.utility.Vector3dVector(points)
+          ply.colors = o3d.utility.Vector3dVector(rgbs)
+          o3d.io.write_point_cloud(f'{pc_save}/cloud_bin_{pc_num}.ply',ply)
+          np.save(f'{disp_save}/disp_{pc_num}.npy',disps)
 
     def generate_gt(self):
         print('Generate gr.npy')

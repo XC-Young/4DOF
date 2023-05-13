@@ -100,6 +100,8 @@ Test_Args.add_argument("--ok_match_dist_threshold",type=float,default=0.1,
                         help="tau 2 for FMR")
 Test_Args.add_argument("--RR_dist_threshold",type=float,default=0.2,
                         help="tau 3 for RR") 
+Test_Args.add_argument("--weight",type=bool,default=False,
+                        help="disparity weight for cross model test") 
 
 
 #Input

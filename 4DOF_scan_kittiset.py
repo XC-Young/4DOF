@@ -246,7 +246,7 @@ class generate_kitti:
                 batch_Rids = np.array(batch_Rids)
                 batch_Rres = np.concatenate(batch_Rres, axis=0)
                 #gennerate rot feats
-                feats0 = self.generate_scan_gfeats(pc0, key0)
+                feats0 = self.generate_scan_gfeats(pc0, key0) #5000*32*8
                 feats1 = self.generate_scan_gfeats(pc1, key1)
 
                 pt_pair = np.load(f'{self.yohosavedir}/{i}/gt_match/{id0}_{id1}.npy').astype(np.int32)
@@ -255,7 +255,7 @@ class generate_kitti:
                 index = index[0:self.batchsize]
                 pt_pair = pt_pair[index]
                 # paired feats
-                feats0 = feats0[pt_pair[:,0],:,:]
+                feats0 = feats0[pt_pair[:,0],:,:] #64*32*8
                 feats1 = feats1[pt_pair[:,1],:,:]
 
                 item={

@@ -212,6 +212,9 @@ python Test.py --Part PartII --max_iter 1000 --dataset kittisubseq --ransac_d 1.
 
 python Test.py --Part PartI --max_iter 1000 --dataset kittiscst --ransac_d 1.5 --tau_2 2 #YOHO-C on KITTI_Scst
 python Test.py --Part PartII --max_iter 1000 --dataset kittiscst --ransac_d 1.5 --tau_2 2 #YOHO-O on KITTI_Scst
+
+python Test.py --Part PartI --max_iter 1000 --dataset kitti+360 --ransac_d 1.5 --tau_2 2 
+python Test.py --Part PartII --max_iter 1000 --dataset kitti+360 --ransac_d 1.5 --tau_2 2 
 ```
 
 ## Customize YOHO according to your needs

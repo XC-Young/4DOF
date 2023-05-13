@@ -51,6 +51,7 @@ if sign=='PartI':
     if args.ransac_d>0:
         config.ransac_c_inlinerdist=args.ransac_d
     config.testset_name=args.dataset
+    config.weight=False
     eval_net=name2evaluator[config.evaluator](config,max_iter=args.max_iter)
     eval_net.eval()
 elif sign=='PartII':
