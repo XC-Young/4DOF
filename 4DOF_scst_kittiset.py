@@ -21,8 +21,8 @@ class scst_generate:
   def __init__(self):
     # self.testseq = [8,9]
     # self.scstdir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/kittiscst'
-    self.testseq = [10]
-    self.scstdir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/kitti+360'
+    # self.testseq = [10]
+    # self.scstdir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/origin_data/kitti+360'
     self.predir = f'/home/hdmap/yxcdata/02_Codes/YOHO/data/YOHO_FCGF/Testset'
     self.load_model()
     self.G = np.load(f'./group_related/Rotation_8.npy')

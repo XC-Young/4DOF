@@ -114,6 +114,13 @@ def random_rotation_zgroup():
   R = Rzalpha
   return R
 
+def GetRotationAngles(rot_mat):
+	theta_x = np.arctan2(rot_mat[2,1], rot_mat[2,2])* 180 / np.pi
+	theta_y = np.arctan2(-rot_mat[2,0], \
+          np.sqrt(rot_mat[2,1]*rot_mat[2,1]+rot_mat[2,2]*rot_mat[2,2]))* 180 / np.pi
+	theta_z = np.arctan2(rot_mat[1,0], rot_mat[0,0])* 180 / np.pi
+	return theta_x, theta_y, theta_z
+
 #train
 class MultiGPUWrapper(nn.Module):
     def __init__(self,network,losses):

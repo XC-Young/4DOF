@@ -133,7 +133,7 @@ class Evaluator_PartI:
                 f'Mean_Registration_Recall {Mean_Registration_Recall}\n'
 
         with open('data/results.log','a') as f:
-            f.write(msg+'\n')
+            f.write(msg)
         print(msg)
                
 class Evaluator_PartII:
@@ -238,7 +238,7 @@ class Evaluator_PartII:
                 f'Mean_Registration_Recall {Mean_Registration_Recall}\n'
 
         with open('data/results.log','a') as f:
-            f.write(msg+'\n')
+            f.write(msg)
         print(msg)
 
 

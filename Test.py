@@ -2,7 +2,9 @@ import argparse
 import parses.parses_partI as parses_partI
 import parses.parses_partII as parses_partII
 from tests.evaluator import name2evaluator
+import time
 
+start = time.perf_counter()
 parser = argparse.ArgumentParser()
 parser.add_argument(
     '--Part',
@@ -66,3 +68,10 @@ elif sign=='PartII':
     eval_net.eval()
 else:
     print('wrong sign')
+
+end = time.perf_counter()
+runtime = end-start
+msg = "TestTime: "+str(runtime)+"s"+'\n'
+with open('data/results.log','a') as f:
+    f.write(msg+'\n')
+print(msg)

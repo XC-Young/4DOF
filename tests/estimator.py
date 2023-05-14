@@ -5,7 +5,7 @@ Realize YOHO-C/O.
 import numpy as np
 from tqdm import tqdm
 from utils.r_eval import compute_R_diff
-from utils.utils import transform_points,make_non_exists_dir
+from utils.utils import transform_points,make_non_exists_dir,GetRotationAngles
 from functools import partial
 from multiprocessing import Pool
 
@@ -176,7 +176,9 @@ class yohoc:
                     #if not ok:continue
                     trans=self.Threepps2Tran(kps0_init,kps1_init)
                     overlap=self.overlap_cal(Keys_m0,Keys_m1,trans)
-                    if overlap>best_overlap:
+                    R_x,R_y,R_z=GetRotationAngles(trans[0:3,0:3])
+                    R_xy=abs(R_x)+abs(R_y)
+                    if R_xy<=15 and overlap>best_overlap:
                         best_overlap=overlap
                         best_trans_ransac=trans
                         best_3p_in_0=kps0_init
@@ -297,7 +299,9 @@ class yohoc_mul:
                 kps1_init=Keys_m1[idxs_init]
                 trans=self.Threepps2Tran(kps0_init,kps1_init)
                 overlap=self.overlap_cal(Keys_m0,Keys_m1,trans)
-                if overlap>best_overlap:
+                R_x,R_y,R_z=GetRotationAngles(trans[0:3,0:3])
+                R_xy=abs(R_x)+abs(R_y)
+                if R_xy<=15 and overlap>best_overlap:
                     best_overlap=overlap
                     best_trans_ransac=trans
                     best_3p_in_0=kps0_init
