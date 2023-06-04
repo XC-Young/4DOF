@@ -29,10 +29,8 @@ class refiner:
         pass
 
     def center_cal(self,key_m0,key_m1,scores):
-        key_m0=key_m0*scores[:,None]
-        key_m1=key_m1*scores[:,None]
-        key_m0=np.sum(key_m0,axis=0)
-        key_m1=np.sum(key_m1,axis=0)
+        key_m0=np.mean(key_m0,axis=0)
+        key_m1=np.mean(key_m1,axis=0)
         return key_m0,key_m1
 
     def SVDR_w(self,beforerot,afterrot,scores):# beforerot afterrot Scene2,Scene1
@@ -46,20 +44,23 @@ class refiner:
         key_m1=key_m1-center1[None,:]
         return self.SVDR_w(key_m1,key_m0,scores)
 
-    def t_cal(self,center0,center1,R):
-        return center0-center1@R.T
+    def t_cal(self,key_m0,key_m1,scores,R):
+        scores = scores / np.sum(scores)
+        t_matches = key_m0 - key_m1@R.T
+        t = np.sum(scores[:,None]*t_matches, axis=0)
+        return t
 
     def Rt_cal(self,key_m0,key_m1,scores):
-        scores=scores/np.sum(scores)
         center0,center1=self.center_cal(key_m0,key_m1,scores)
         R=self.R_cal(key_m0,key_m1,center0,center1,scores)
-        t=self.t_cal(center0,center1,R)
+        t=self.t_cal(key_m0,key_m1,scores,R)
         return R,t
     
     def Refine_trans(self,key_m0,key_m1,T,scores,inlinerdist=None):
         key_m1_t=transform_points(key_m1,T)
         diff=np.sum(np.square(key_m0-key_m1_t),axis=-1)
-        overlap=np.where(diff<inlinerdist*inlinerdist)[0]
+        diff_w=diff*scores
+        overlap=np.where(diff_w<inlinerdist*inlinerdist)[0]
             
         scores=scores[overlap]
         key_m0=key_m0[overlap]
@@ -97,7 +98,21 @@ class yohoc:
         R_index_pre_probability=R_index_pre_probability/np.sum(R_index_pre_probability)
         return R_index_pre_statistic,R_index_pre_probability
 
-
+    def Threepps2Tran_w(self,kps0_init,kps1_init,weight):
+        weight_c = weight / np.sum(weight)
+        center0=np.mean(kps0_init,0,keepdims=True)
+        center1=np.mean(kps1_init,0,keepdims=True)
+        kps0 = kps0_init-center0
+        kps1 = kps1_init-center1
+        m = (kps1 * weight[:,None]).T @ kps0
+        U,S,VT = np.linalg.svd(m)
+        rotation = VT.T @ U.T   #predicted RT
+        t_matches = kps0_init - kps1_init@rotation.T #(3,3)
+        offset = np.sum(weight_c[:,None]*t_matches, axis=0) #(3,)
+        transform = np.eye(4)
+        transform[0:3,0:3] = rotation
+        transform[0:3,3] = offset
+        return transform #3*4
 
     def Threepps2Tran(self,kps0_init,kps1_init):
         center0=np.mean(kps0_init,0,keepdims=True)
@@ -109,7 +124,13 @@ class yohoc:
         transform=np.concatenate([rotation,offset.T],1)
         return transform #3*4
 
-
+    def overlap_cal_w(self,key_m0,key_m1,T,weight):
+        key_m1=transform_points(key_m1,T)
+        diff=np.sum(np.square(key_m0-key_m1),axis=-1)
+        diff_w = diff*weight
+        overlap=np.mean(diff_w<self.inliner_dist*self.inliner_dist)
+        return overlap
+    
     def overlap_cal(self,key_m0,key_m1,T):
         key_m1=transform_points(key_m1,T)
         diff=np.sum(np.square(key_m0-key_m1),axis=-1)
@@ -146,6 +167,14 @@ class yohoc:
             pps=np.load(f'{match_dir}/{id0}-{id1}.npy')
             Keys_m0=Keys0[pps[:,0]]
             Keys_m1=Keys1[pps[:,1]]
+            #Disparities
+            if datasetname[0:9]=='kittiscst' or datasetname[0:9]=='kitti+360':
+                disps1 = np.load(f'{self.cfg.origin_data_dir}/{datasetname}/Disparity/disp_{id1}.npy')
+                disps_m1=disps1[pps[:,1]]
+                disps_m1 = 1/disps_m1
+                d_max = np.max(disps_m1)
+                d_min = np.min(disps_m1)
+                disps_m1 = (disps_m1-d_min)/(d_max-d_min)
             #Indexs
             Index=np.load(f'{Index_dir}/{id0}-{id1}.npy')
             #DR_statistic
@@ -174,8 +203,19 @@ class yohoc:
                     kps0_init=Keys_m0[idxs_init]
                     kps1_init=Keys_m1[idxs_init]
                     #if not ok:continue
-                    trans=self.Threepps2Tran(kps0_init,kps1_init)
-                    overlap=self.overlap_cal(Keys_m0,Keys_m1,trans)
+                    if datasetname[0:9]=='kittiscst' or datasetname[0:9]=='kitti+360':
+                        if self.cfg.weight == False:
+                            trans=self.Threepps2Tran(kps0_init,kps1_init)
+                            overlap=self.overlap_cal(Keys_m0,Keys_m1,trans)
+                        else:
+                            disps1_init=disps_m1[idxs_init]
+                            weight_init = np.exp(-np.sqrt(disps1_init))
+                            weight_m1 = np.exp(-np.sqrt(disps_m1))
+                            trans=self.Threepps2Tran_w(kps0_init,kps1_init,weight_init)
+                            overlap=self.overlap_cal_w(Keys_m0,Keys_m1,trans,weight_m1)
+                    else:
+                        trans=self.Threepps2Tran(kps0_init,kps1_init)
+                        overlap=self.overlap_cal(Keys_m0,Keys_m1,trans)
                     R_x,R_y,R_z=GetRotationAngles(trans[0:3,0:3])
                     R_xy=abs(R_x)+abs(R_y)
                     if R_xy<=15 and overlap>best_overlap:
@@ -186,7 +226,13 @@ class yohoc:
                         recall_time=iter_ransac
                 # refine:
                 refine_times = 10
-                scores = np.ones([Keys_m0.shape[0]])
+                if datasetname[0:9]=='kittiscst' or datasetname[0:9]=='kitti+360':
+                    if self.cfg.weight == False:
+                        scores = np.ones([Keys_m0.shape[0]])
+                    else:
+                        scores = np.exp(-np.sqrt(disps_m1))
+                else:
+                    scores = np.ones([Keys_m0.shape[0]])
                 for refine_i in range(refine_times):
                     thres = 0.5 + ((2-0.5)/refine_times)*(refine_times-refine_i)
                     best_trans_ransac=self.refiner.Refine_trans(Keys_m0,Keys_m1,best_trans_ransac,scores,inlinerdist=self.inliner_dist*thres)
@@ -235,11 +281,33 @@ class yohoc_mul:
         transform=np.concatenate([rotation,offset.T],1)
         return transform #3*4
 
+    def Threepps2Tran_w(self,kps0_init,kps1_init,weight):
+        weight_c = weight / np.sum(weight)
+        center0=np.mean(kps0_init,0,keepdims=True)
+        center1=np.mean(kps1_init,0,keepdims=True)
+        kps0 = kps0_init-center0
+        kps1 = kps1_init-center1
+        m = (kps1 * weight[:,None]).T @ kps0
+        U,S,VT = np.linalg.svd(m)
+        rotation = VT.T @ U.T   #predicted RT
+        t_matches = kps0_init - kps1_init@rotation.T #(3,3)
+        offset = np.sum(weight_c[:,None]*t_matches, axis=0) #(3,)
+        transform = np.eye(4)
+        transform[0:3,0:3] = rotation
+        transform[0:3,3] = offset
+        return transform #3*4
 
     def overlap_cal(self,key_m0,key_m1,T):
         key_m1=transform_points(key_m1,T)
         diff=np.sum(np.square(key_m0-key_m1),axis=-1)
         overlap=np.mean(diff<self.inliner_dist*self.inliner_dist)
+        return overlap
+
+    def overlap_cal_w(self,key_m0,key_m1,T,weight):
+        key_m1=transform_points(key_m1,T)
+        diff=np.sum(np.square(key_m0-key_m1),axis=-1)
+        diff_w = diff*weight
+        overlap=np.mean(diff_w<self.inliner_dist*self.inliner_dist)
         return overlap
 
     def transdiff(self,gt,pre):
@@ -269,6 +337,13 @@ class yohoc_mul:
         pps=np.load(f'{match_dir}/{id0}-{id1}.npy')
         Keys_m0=Keys0[pps[:,0]]
         Keys_m1=Keys1[pps[:,1]]
+        if datasetname[0:9]=='kittiscst' or datasetname[0:9]=='kitti+360':
+            disps1 = np.load(f'{self.cfg.origin_data_dir}/{datasetname}/Disparity/disp_{id1}.npy')
+            disps_m1=disps1[pps[:,1]]
+            disps_m1 = 1/disps_m1
+            d_max = np.max(disps_m1)
+            d_min = np.min(disps_m1)
+            disps_m1 = (disps_m1-d_min)/(d_max-d_min)
         #Indexs
         Index=np.load(f'{Index_dir}/{id0}-{id1}.npy')
         #DR_statistic
@@ -297,8 +372,19 @@ class yohoc_mul:
                 idxs_init=np.random.choice(np.array(R_index_pre_statistic[R_index]),3) #guarantee the same index
                 kps0_init=Keys_m0[idxs_init]
                 kps1_init=Keys_m1[idxs_init]
-                trans=self.Threepps2Tran(kps0_init,kps1_init)
-                overlap=self.overlap_cal(Keys_m0,Keys_m1,trans)
+                if datasetname[0:9]=='kittiscst' or datasetname[0:9]=='kitti+360':
+                    if self.cfg.weight == False:
+                        trans=self.Threepps2Tran(kps0_init,kps1_init)
+                        overlap=self.overlap_cal(Keys_m0,Keys_m1,trans)
+                    else:
+                        disps1_init=disps_m1[idxs_init]
+                        weight_init = np.exp(-np.sqrt(disps1_init))
+                        weight_m1 = np.exp(-np.sqrt(disps_m1))
+                        trans=self.Threepps2Tran_w(kps0_init,kps1_init,weight_init)
+                        overlap=self.overlap_cal_w(Keys_m0,Keys_m1,trans,weight_m1)
+                else:
+                    trans=self.Threepps2Tran(kps0_init,kps1_init)
+                    overlap=self.overlap_cal(Keys_m0,Keys_m1,trans)
                 R_x,R_y,R_z=GetRotationAngles(trans[0:3,0:3])
                 R_xy=abs(R_x)+abs(R_y)
                 if R_xy<=15 and overlap>best_overlap:
@@ -309,7 +395,13 @@ class yohoc_mul:
                     recall_time=iter_ransac
             # refine:
             refine_times = 10
-            scores = np.ones([Keys_m0.shape[0]])
+            if datasetname[0:9]=='kittiscst' or datasetname[0:9]=='kitti+360':
+                if self.cfg.weight == False:
+                    scores = np.ones([Keys_m0.shape[0]])
+                else:
+                    scores = np.exp(-np.sqrt(disps_m1))
+            else:
+                scores = np.ones([Keys_m0.shape[0]])
             for refine_i in range(refine_times):
                 thres = 0.5 + ((2-0.5)/refine_times)*(refine_times-refine_i)
                 best_trans_ransac=self.refiner.Refine_trans(Keys_m0,Keys_m1,best_trans_ransac,scores,inlinerdist=self.inliner_dist*thres)

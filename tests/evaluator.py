@@ -73,6 +73,7 @@ class Evaluator_PartI:
 
     def eval(self):
         datasets=get_dataset(self.cfg,False)
+        max_iter=1000
         FMRS=[]
         all_pair_fmrs=[]
         for scene,dataset in datasets.items():
@@ -99,18 +100,26 @@ class Evaluator_PartI:
                 oknum=0
                 wholenum=0
                 for pair in dataset.pair_ids:
+                    writer=open(f'{self.cfg.output_cache_fn}/Testset/{dataset.name}/Match/YOHO_C/{self.cfg.max_iter}iters/pre_RRE&RTE.log','a')
                     id0,id1=pair
                     wholenum+=1
                     gt=dataset.get_transform(id0,id1)
                     pre=np.load(f'data/YOHO_FCGF/Testset/{dataset.name}/Match/YOHO_C/{self.cfg.max_iter}iters/{id0}-{id1}.npz')['trans']
                     tdiff = np.linalg.norm(pre[0:3,-1]-gt[0:3,-1])
                     Rdiff=compute_R_diff(gt[0:3,0:3],pre[0:3,0:3])
+                    
                     if tdiff<=2 and Rdiff<=5:
                         oknum+=1
-                    if Rdiff<5:
-                        whole_rre.append(Rdiff)
-                    if tdiff<2:
-                        whole_rte.append(tdiff)
+                        writer.write(f'{int(id0)}\t{int(id1)}\tSucceed!\n')
+                        writer.write(f'RRE:{Rdiff}\tRTE:{tdiff}\n')
+                        if Rdiff<5:
+                            whole_rre.append(Rdiff)
+                        if tdiff<2:
+                            whole_rte.append(tdiff)
+                    else:
+                        writer.write(f'{int(id0)}\t{int(id1)}\tFailed...\n')
+                        writer.write(f'RRE:{Rdiff}\tRTE:{tdiff}\n')
+                    writer.close()
                 RRs.append(oknum/wholenum)
                 whole_ok_num+=oknum
                 whole_all_num+=wholenum
@@ -212,10 +221,10 @@ class Evaluator_PartII:
                     Rdiff=compute_R_diff(gt[0:3,0:3],pre[0:3,0:3])
                     if tdiff<=2 and Rdiff<=5:
                         oknum+=1
-                    if Rdiff<5:
-                        whole_rre.append(Rdiff)
-                    if tdiff<2:
-                        whole_rte.append(tdiff)
+                        if Rdiff<5:
+                            whole_rre.append(Rdiff)
+                        if tdiff<2:
+                            whole_rte.append(tdiff)
                 RRs.append(oknum/wholenum)
                 whole_ok_num+=oknum
                 whole_all_num+=wholenum
